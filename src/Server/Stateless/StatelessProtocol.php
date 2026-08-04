@@ -13,6 +13,7 @@ namespace Mcp\Server\Stateless;
 
 use Mcp\Exception\MissingRequestMetaException;
 use Mcp\Exception\MissingRequiredClientCapabilityException;
+use Mcp\Exception\RequestStateException;
 use Mcp\JsonRpc\MessageFactory;
 use Mcp\Schema\Enum\ProtocolVersion;
 use Mcp\Schema\JsonRpc\Error;
@@ -79,6 +80,7 @@ final class StatelessProtocol
         private readonly float $subscriptionLifetime = 30.0,
         ?WireCodecInterface $codec = null,
         private readonly ?StandardHeaderValidator $headerValidator = null,
+        private readonly ?RequestStateCodec $requestStateCodec = null,
     ) {
         $this->codec = $codec ?? new Rev2026Codec($configuration->serverInfo);
     }
@@ -289,6 +291,27 @@ final class StatelessProtocol
         $session = new Session(new InMemorySessionStore());
         $session->set(RequestMeta::class, $meta);
 
+        try {
+            $input = $this->liftInputContext($decoded['params'] ?? null);
+        } catch (RequestStateException $e) {
+            // Deliberately reported as invalid params rather than as an
+            // authorization failure. The client cannot inspect or repair the
+            // value — it only echoes what it was given — so the actionable
+            // truth is that this request cannot be served, and the reason code
+            // stays opaque so a forged retry learns nothing from the answer.
+            $this->logger->warning('Rejected a requestState that failed verification.', ['method' => $method, 'reason' => $e->getMessage()]);
+
+            return StatelessResult::error(Error::forInvalidParams('The supplied requestState failed verification.', $id), 400);
+        }
+
+        if (null !== $input) {
+            $session->set(InputContext::class, $input);
+        }
+
+        if (null !== $this->requestStateCodec) {
+            $session->set(RequestStateCodec::class, $this->requestStateCodec);
+        }
+
         foreach ($this->requestHandlers as $handler) {
             if (!$handler->supports($request)) {
                 continue;
@@ -320,19 +343,65 @@ final class StatelessProtocol
     }
 
     /**
+     * Reads the multi round-trip material off a retry, verifying the state
+     * before any of it reaches a handler.
+     *
+     * A request carrying neither member is a first call and gets no context at
+     * all, which is what a handler tests to decide whether it still needs to
+     * ask. `inputResponses` without a `requestState` is legitimate — the spec
+     * lets a server ask for input without sealing any context of its own.
+     *
+     * @param array<string, mixed>|null $params
+     *
+     * @throws RequestStateException when a state is present but does not verify
+     */
+    private function liftInputContext(?array $params): ?InputContext
+    {
+        $responses = \is_array($params['inputResponses'] ?? null) ? $params['inputResponses'] : null;
+        $state = \is_string($params['requestState'] ?? null) ? $params['requestState'] : null;
+
+        if (null === $responses && null === $state) {
+            return null;
+        }
+
+        // Each answer is a result object. A scalar in that slot is not a
+        // response the server could read, and taking it as one would let a
+        // malformed retry look like a satisfied request — so the answers that
+        // are not objects are dropped, leaving the handler to ask again for
+        // what it still has not been given.
+        if (null !== $responses) {
+            $responses = array_filter($responses, static fn (mixed $response): bool => \is_array($response));
+        }
+
+        $payload = [];
+
+        if (null !== $state) {
+            if (null === $this->requestStateCodec) {
+                // A server with no codec never minted a state, so anything
+                // arriving as one was not produced here. Accepting it would
+                // mean trusting an unverifiable blob.
+                throw new RequestStateException('mac');
+            }
+
+            $payload = $this->requestStateCodec->verify($state);
+        }
+
+        return new InputContext($responses ?? [], $payload);
+    }
+
+    /**
      * Runs a result through the wire codec on its way out.
      *
-     * The round-trip through JSON is what flattens the result — and everything
-     * nested inside it — into the plain arrays the codec stamps. Handing the
-     * codec objects instead would make it responsible for knowing how each one
-     * serializes, which is exactly the coupling this layer exists to avoid.
+     * The codec only ever adds or reads top-level members, so the result's own
+     * serialization is handed over as-is and everything nested inside it stays
+     * whatever it already was. Flattening it first — a json_encode/json_decode
+     * round trip — would be lossy in a way that matters here: an empty object
+     * becomes an empty array, and `params: {}` would reach the wire as
+     * `params: []`, which is a different thing to a JSON Schema.
      */
     private function encode(string $method, string|int $id, ResultInterface $result): StatelessResult
     {
-        /** @var array<string, mixed> $body */
-        $body = json_decode(json_encode($result, \JSON_THROW_ON_ERROR), true, flags: \JSON_THROW_ON_ERROR);
-
-        return StatelessResult::ok($id, $this->codec->encodeResult($method, $body));
+        return StatelessResult::ok($id, $this->codec->encodeResult($method, (array) $result->jsonSerialize()));
     }
 
     /**

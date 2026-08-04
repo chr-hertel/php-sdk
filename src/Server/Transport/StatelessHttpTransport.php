@@ -14,10 +14,14 @@ namespace Mcp\Server\Transport;
 use Http\Discovery\Psr17FactoryDiscovery;
 use Mcp\Schema\JsonRpc\Error;
 use Mcp\Server\Stateless\StatelessProtocol;
+use Mcp\Server\Transport\Http\Middleware\CorsMiddleware;
+use Mcp\Server\Transport\Http\Middleware\DnsRebindingProtectionMiddleware;
+use Mcp\Server\Transport\Http\MiddlewareRequestHandler;
 use Psr\Http\Message\ResponseFactoryInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Message\StreamFactoryInterface;
+use Psr\Http\Server\MiddlewareInterface;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 
@@ -43,18 +47,58 @@ final class StatelessHttpTransport
     private ResponseFactoryInterface $responseFactory;
     private StreamFactoryInterface $streamFactory;
 
+    /** @var list<MiddlewareInterface> */
+    private array $middleware;
+
+    /**
+     * @param iterable<MiddlewareInterface>|null $middleware `null` installs {@see self::defaultMiddleware()}; `[]` disables all middleware
+     */
     public function __construct(
         private readonly StatelessProtocol $protocol,
         ?ResponseFactoryInterface $responseFactory = null,
         ?StreamFactoryInterface $streamFactory = null,
         private readonly LoggerInterface $logger = new NullLogger(),
         private readonly int $maxBodyBytes = self::DEFAULT_MAX_BODY_BYTES,
+        ?iterable $middleware = null,
     ) {
+        $this->middleware = null === $middleware
+            ? self::defaultMiddleware()
+            : array_values([...$middleware]);
+
         $this->responseFactory = $responseFactory ?? Psr17FactoryDiscovery::findResponseFactory();
         $this->streamFactory = $streamFactory ?? Psr17FactoryDiscovery::findStreamFactory();
     }
 
+    /**
+     * Browser-facing protections that have nothing to do with which protocol
+     * era is in play.
+     *
+     * Notably absent is the protocol-version middleware the handshake
+     * transport installs: in the modern era the version travels in each
+     * request's `_meta` and is checked against the header there, so a
+     * middleware inspecting only the header would be judging half the story.
+     *
+     * @return list<MiddlewareInterface>
+     */
+    public static function defaultMiddleware(): array
+    {
+        return [
+            new CorsMiddleware(),
+            new DnsRebindingProtectionMiddleware(),
+        ];
+    }
+
     public function handle(ServerRequestInterface $request): ResponseInterface
+    {
+        $handler = new MiddlewareRequestHandler(
+            $this->middleware,
+            \Closure::fromCallable([$this, 'dispatch']),
+        );
+
+        return $handler->handle($request);
+    }
+
+    private function dispatch(ServerRequestInterface $request): ResponseInterface
     {
         if ('OPTIONS' === $request->getMethod()) {
             return $this->responseFactory->createResponse(204);

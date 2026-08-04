@@ -83,9 +83,14 @@ class InputRequiredResult implements ResultInterface
                 // with the envelope it was needed to build.
                 $envelope = $request->withId(0)->jsonSerialize();
 
+                $params = $envelope['params'] ?? null;
+
                 $requests[$key] = [
                     'method' => $request::getMethod(),
-                    'params' => $envelope['params'] ?? new \stdClass(),
+                    // An empty PHP array encodes as `[]`, but params is a JSON
+                    // object — a request that happens to take no arguments
+                    // still has to look like one that could.
+                    'params' => [] === $params || null === $params ? new \stdClass() : $params,
                 ];
             }
             $data['inputRequests'] = $requests;

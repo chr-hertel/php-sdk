@@ -39,6 +39,7 @@ use Mcp\Server;
 use Mcp\Server\Transport\StatelessHttpTransport;
 use Mcp\Tests\Conformance\Elements;
 use Mcp\Tests\Conformance\FileLogger;
+use Mcp\Tests\Conformance\MrtrElements;
 
 chdir(__DIR__);
 
@@ -108,6 +109,17 @@ $protocol = Server::builder()
             'required' => ['region'],
         ],
     )
+    ->addTool([Elements::class, 'toolWithProgress'], name: 'test_tool_with_progress', description: 'Tests tool that reports progress notifications')
+    // Multi round-trip request tools (SEP-2322). Each asks for input on the
+    // first call and completes on the retry.
+    ->addTool([MrtrElements::class, 'elicitation'], name: 'test_input_required_result_elicitation', description: 'MRTR: asks for a name via elicitation')
+    ->addTool([MrtrElements::class, 'sampling'], name: 'test_input_required_result_sampling', description: 'MRTR: asks for a sampling completion')
+    ->addTool([MrtrElements::class, 'listRoots'], name: 'test_input_required_result_list_roots', description: 'MRTR: asks for the client roots')
+    ->addTool([MrtrElements::class, 'elicitation'], name: 'test_input_required_result_request_state', description: 'MRTR: exercises requestState round-tripping')
+    ->addTool([MrtrElements::class, 'multipleInputs'], name: 'test_input_required_result_multiple_inputs', description: 'MRTR: asks for two inputs at once')
+    ->addTool([MrtrElements::class, 'multiRound'], name: 'test_input_required_result_multi_round', description: 'MRTR: asks across two sequential rounds')
+    ->addTool([MrtrElements::class, 'capabilities'], name: 'test_input_required_result_capabilities', description: 'MRTR: asks only for capabilities the client declared')
+    ->addTool([MrtrElements::class, 'tamperedState'], name: 'test_input_required_result_tampered_state', description: 'MRTR: completes only when the echoed state verifies')
     // Resources
     ->addResource(static fn () => 'This is the content of the static text resource.', 'test://static-text', 'static-text', 'A static text resource for testing')
     ->addResource(static fn () => fopen('data://image/png;base64,'.Elements::TEST_IMAGE_BASE64, 'r'), 'test://static-binary', 'static-binary', 'A static binary resource (image) for testing')
@@ -115,6 +127,12 @@ $protocol = Server::builder()
     // Prompts
     ->addPrompt(static fn () => [['role' => 'user', 'content' => 'This is a simple prompt for testing.']], name: 'test_simple_prompt', description: 'A simple prompt without arguments')
     ->addPrompt([Elements::class, 'promptWithArguments'], name: 'test_prompt_with_arguments', description: 'A prompt with required arguments')
+    ->addPrompt([Elements::class, 'promptWithEmbeddedResource'], name: 'test_prompt_with_embedded_resource', description: 'A prompt that includes an embedded resource')
+    ->addPrompt([Elements::class, 'promptWithImage'], name: 'test_prompt_with_image', description: 'A prompt that includes image content')
+    ->addPrompt([MrtrElements::class, 'prompt'], name: 'test_input_required_result_prompt', description: 'MRTR: a prompt that asks for input first')
+    // A fixed key so the fixture behaves identically across the two processes a
+    // retry may land on; a real server would load this from configuration.
+    ->setRequestState(str_repeat('conformance-fixture-key-', 2))
     ->buildStateless([ProtocolVersion::V2026_07_28]);
 
 $transport = new StatelessHttpTransport($protocol, logger: $logger);

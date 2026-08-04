@@ -20,12 +20,13 @@ use Mcp\Schema\JsonRpc\Request;
 use Mcp\Schema\JsonRpc\Response;
 use Mcp\Schema\Request\GetPromptRequest;
 use Mcp\Schema\Result\GetPromptResult;
+use Mcp\Schema\Result\InputRequiredResult;
 use Mcp\Server\Session\SessionInterface;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 
 /**
- * @implements RequestHandlerInterface<GetPromptResult>
+ * @implements RequestHandlerInterface<GetPromptResult|InputRequiredResult>
  *
  * @author Tobias Nyholm <tobias.nyholm@gmail.com>
  */
@@ -44,7 +45,7 @@ final class GetPromptHandler implements RequestHandlerInterface
     }
 
     /**
-     * @return Response<GetPromptResult>|Error
+     * @return Response<GetPromptResult|InputRequiredResult>|Error
      */
     public function handle(Request $request, SessionInterface $session): Response|Error
     {
@@ -60,6 +61,12 @@ final class GetPromptHandler implements RequestHandlerInterface
             $arguments['_request'] = $request;
 
             $result = $this->referenceHandler->handle($reference, $arguments);
+
+            // As in CallToolHandler: an MRTR ask is a result in its own right,
+            // not prompt content, so it must not be formatted into messages.
+            if ($result instanceof InputRequiredResult) {
+                return new Response($request->getId(), $result);
+            }
 
             $formatted = $reference->formatResult($result);
 
