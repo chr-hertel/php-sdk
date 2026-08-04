@@ -32,17 +32,9 @@ use Psr\Log\NullLogger;
 /**
  * Dispatches a single modern-era (SEP-2575) request.
  *
- * The handshake-era {@see \Mcp\Server\Protocol} is built around a session that
- * outlives the request: it resolves one, replays `initialize` state into it,
- * and keeps a fiber attached to it across HTTP round-trips. None of that
- * survives into the modern era, where each request is self-describing and
- * independent, so this is a separate dispatcher rather than a mode flag on the
- * old one — the two eras share handlers, not control flow.
- *
- * Request handlers are reused verbatim. They expect a session, so each request
- * gets an ephemeral one that is discarded when the request ends; handlers that
- * merely stash per-request scratch state keep working, and handlers that tried
- * to persist across requests would have had nothing to persist into anyway.
+ * Separate from {@see \Mcp\Server\Protocol} because the modern era has no
+ * session to resolve, replay or keep a fiber against; the two eras share
+ * request handlers, not control flow.
  *
  * @author Christopher Hertel <mail@christopher-hertel.de>
  */
@@ -51,10 +43,8 @@ final class StatelessProtocol
     private readonly WireCodecInterface $codec;
 
     /**
-     * Methods the modern era deleted outright. They are answered as unknown
-     * methods rather than as errors specific to each, because that is exactly
-     * what they are to a modern server — listing them separately only serves
-     * to document the intent.
+     * Methods the modern era deleted. Answered as unknown methods, which is
+     * what they are to a modern server.
      */
     public const REMOVED_METHODS = [
         'initialize',
@@ -103,9 +93,7 @@ final class StatelessProtocol
             return StatelessResult::error(Error::forInvalidRequest('A JSON-RPC message must be a JSON object.'), 400);
         }
 
-        // The id is read before anything is validated so that every error below
-        // can echo it. A request that fails validation still has an id, and a
-        // client correlating responses by id would otherwise lose the reply.
+        // Read before validation so every error below can still echo it.
         $id = $decoded['id'] ?? '';
         if (!\is_string($id) && !\is_int($id)) {
             $id = '';
@@ -128,10 +116,8 @@ final class StatelessProtocol
             return $versionError;
         }
 
-        // After the version is settled, because a peer on the wrong revision
-        // has a more fundamental problem than a header that disagrees with its
-        // body — and telling it about the headers first would send it fixing
-        // the wrong thing.
+        // After the version check: a peer on the wrong revision has a more
+        // fundamental problem than headers that disagree with its body.
         if (null !== $headerError = $this->headerValidator?->validate($method, $params, $headers)) {
             return StatelessResult::error(Error::forHeaderMismatch($headerError, $id), 400);
         }
@@ -144,9 +130,6 @@ final class StatelessProtocol
             return $this->listen($params, $id);
         }
 
-        // Both the deleted methods and never-known ones are "not found". The
-        // 404 pairs the HTTP layer with the JSON-RPC code so a client that
-        // routes on status alone reaches the same conclusion.
         if (\in_array($method, self::REMOVED_METHODS, true)) {
             return StatelessResult::error(
                 Error::forMethodNotFound(\sprintf('Method "%s" does not exist in protocol version %s.', $method, $meta->protocolVersion), $id),
@@ -158,14 +141,9 @@ final class StatelessProtocol
     }
 
     /**
-     * The header and `_meta` must agree on the version before that version can
-     * be judged supported or not.
-     *
-     * The order matters: when the two disagree, the server has been told two
-     * different things and cannot know which the client meant, so "these
-     * contradict" is the honest answer even if one of the two values happens to
-     * be unsupported. Reporting it as an unsupported version instead would send
-     * the client off to renegotiate a version that was never the problem.
+     * Header and `_meta` must agree before the version can be judged supported:
+     * when they disagree the server cannot know which the client meant, so a
+     * mismatch outranks an unsupported version.
      *
      * @param array<string, string> $headers
      */
@@ -196,12 +174,8 @@ final class StatelessProtocol
     }
 
     /**
-     * Opens a `subscriptions/listen` stream.
-     *
-     * The subscription needs no identifier of its own: the spec defines it as
-     * the JSON-RPC id of this very request, which both sides already have. So
-     * there is no id to mint, store, or hand back — every frame is tagged with
-     * something the client chose.
+     * Opens a `subscriptions/listen` stream. The subscription id is the
+     * JSON-RPC id of this request, so there is none to mint.
      *
      * @param array<string, mixed>|null $params
      */
@@ -222,20 +196,10 @@ final class StatelessProtocol
                 ],
             ];
 
-            // Nothing else is emitted yet: delivering list-changed and
-            // resource-updated notifications means observing mutations made by
-            // *other* requests, which under a share-nothing runtime needs a
-            // cross-process channel this SDK does not yet define. Holding the
-            // stream open for a bounded window keeps the subscription honest —
-            // the client sees an open, acknowledged stream — without pinning a
-            // worker indefinitely for events that cannot arrive.
-            //
-            // The tick is what makes that bound real. PHP only learns the peer
-            // hung up by trying to write to it, so a loop that merely sleeps
-            // holds its worker for the full lifetime after the client has gone.
-            // On a fixed-size FPM pool a handful of abandoned subscriptions is
-            // enough to starve every other request, which is exactly what makes
-            // it worth the extra yield.
+            // Cross-request notifications need a channel this SDK does not
+            // define yet, so the stream only waits. The tick is not optional:
+            // PHP spots a dropped peer by writing, and a sleeping loop would
+            // pin an FPM worker for the full lifetime.
             $deadline = microtime(true) + $lifetime;
             while (microtime(true) < $deadline) {
                 yield null;
@@ -247,8 +211,8 @@ final class StatelessProtocol
                 usleep(250_000);
             }
 
-            // Graceful closure (SHOULD): tell the client the subscription ended
-            // deliberately, so it can distinguish this from a dropped transport.
+            // Graceful closure (SHOULD), so the client can tell this from a
+            // dropped transport.
             yield [
                 'jsonrpc' => '2.0',
                 'id' => $id,
@@ -294,11 +258,8 @@ final class StatelessProtocol
         try {
             $input = $this->liftInputContext($decoded['params'] ?? null);
         } catch (RequestStateException $e) {
-            // Deliberately reported as invalid params rather than as an
-            // authorization failure. The client cannot inspect or repair the
-            // value — it only echoes what it was given — so the actionable
-            // truth is that this request cannot be served, and the reason code
-            // stays opaque so a forged retry learns nothing from the answer.
+            // Invalid params, not an authorization failure: the client only
+            // echoes what it was given, and the reason stays out of the answer.
             $this->logger->warning('Rejected a requestState that failed verification.', ['method' => $method, 'reason' => $e->getMessage()]);
 
             return StatelessResult::error(Error::forInvalidParams('The supplied requestState failed verification.', $id), 400);
@@ -344,12 +305,8 @@ final class StatelessProtocol
 
     /**
      * Reads the multi round-trip material off a retry, verifying the state
-     * before any of it reaches a handler.
-     *
-     * A request carrying neither member is a first call and gets no context at
-     * all, which is what a handler tests to decide whether it still needs to
-     * ask. `inputResponses` without a `requestState` is legitimate — the spec
-     * lets a server ask for input without sealing any context of its own.
+     * before any of it reaches a handler. Neither member means a first call,
+     * which is what a handler tests to decide whether it still needs to ask.
      *
      * @param array<string, mixed>|null $params
      *
@@ -364,11 +321,8 @@ final class StatelessProtocol
             return null;
         }
 
-        // Each answer is a result object. A scalar in that slot is not a
-        // response the server could read, and taking it as one would let a
-        // malformed retry look like a satisfied request — so the answers that
-        // are not objects are dropped, leaving the handler to ask again for
-        // what it still has not been given.
+        // Answers are result objects; dropping non-objects leaves the handler
+        // to ask again rather than read a malformed retry as satisfied.
         if (null !== $responses) {
             $responses = array_filter($responses, static fn (mixed $response): bool => \is_array($response));
         }
@@ -376,10 +330,9 @@ final class StatelessProtocol
         $payload = [];
 
         if (null !== $state) {
+            // A server with no codec never minted a state, so this one cannot
+            // have come from here.
             if (null === $this->requestStateCodec) {
-                // A server with no codec never minted a state, so anything
-                // arriving as one was not produced here. Accepting it would
-                // mean trusting an unverifiable blob.
                 throw new RequestStateException('mac');
             }
 
@@ -390,14 +343,8 @@ final class StatelessProtocol
     }
 
     /**
-     * Runs a result through the wire codec on its way out.
-     *
-     * The codec only ever adds or reads top-level members, so the result's own
-     * serialization is handed over as-is and everything nested inside it stays
-     * whatever it already was. Flattening it first — a json_encode/json_decode
-     * round trip — would be lossy in a way that matters here: an empty object
-     * becomes an empty array, and `params: {}` would reach the wire as
-     * `params: []`, which is a different thing to a JSON Schema.
+     * Runs a result through the wire codec. Passed as-is rather than via a
+     * json round trip, which would turn a nested `{}` into `[]`.
      */
     private function encode(string $method, string|int $id, ResultInterface $result): StatelessResult
     {

@@ -62,8 +62,7 @@ final class GetPromptHandler implements RequestHandlerInterface
 
             $result = $this->referenceHandler->handle($reference, $arguments);
 
-            // As in CallToolHandler: an MRTR ask is a result in its own right,
-            // not prompt content, so it must not be formatted into messages.
+            // An ask is a result in its own right, not prompt content.
             if ($result instanceof InputRequiredResult) {
                 return new Response($request->getId(), $result);
             }

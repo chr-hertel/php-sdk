@@ -88,13 +88,9 @@ final class RequestContext
     }
 
     /**
-     * What a multi round-trip retry carried back, or null on a first call.
-     *
-     * Null is the signal to ask: a handler that finds no input context has not
-     * been given answers yet and should return an
-     * {@see \Mcp\Schema\Result\InputRequiredResult} describing what it needs.
-     * Only the modern era has this — the handshake era calls back into the
-     * client mid-request instead, so there is nothing to carry.
+     * What a multi round-trip retry carried back, or null on a first call —
+     * which is the signal to return an
+     * {@see \Mcp\Schema\Result\InputRequiredResult} instead of an answer.
      */
     public function getInputContext(): ?InputContext
     {
@@ -104,13 +100,9 @@ final class RequestContext
     }
 
     /**
-     * What the client said it can do, as declared on this request.
-     *
-     * A modern-era server must not ask for input the client cannot supply —
-     * an elicitation request to a client without the elicitation capability is
-     * a prompt nobody can answer — so a handler checks here before deciding
-     * what to put in its inputRequests. Null in the handshake era, where
-     * capabilities are connection state rather than request state.
+     * What the client declared on this request. A server MUST NOT ask for
+     * input the client cannot supply. Null in the handshake era, where
+     * capabilities are connection state.
      */
     public function getClientCapabilities(): ?ClientCapabilities
     {
@@ -120,12 +112,9 @@ final class RequestContext
     }
 
     /**
-     * Seals handler context into the opaque string an
-     * {@see \Mcp\Schema\Result\InputRequiredResult} carries to the client and
-     * gets back on the retry.
-     *
-     * Signed, not encrypted: the client cannot alter the payload undetected,
-     * but it can read it. Nothing secret belongs in here.
+     * Seals handler context into the string an
+     * {@see \Mcp\Schema\Result\InputRequiredResult} carries to the client.
+     * Signed, not encrypted: nothing secret belongs in the payload.
      *
      * @param array<string, mixed> $payload
      */

@@ -14,12 +14,9 @@ namespace Mcp\Schema\JsonRpc;
 use Mcp\Exception\InvalidArgumentException;
 
 /**
- * Covariant because a Response only ever hands its result out — it is exposed
- * through a readonly property and never consumed — so a Response<Specific> is
- * safely usable wherever a Response<Wider> is expected. That is what lets a
- * handler declare the union of results it may answer with (see
- * {@see \Mcp\Server\Handler\Request\CallToolHandler}) while each individual
- * return path constructs a Response of one concrete result type.
+ * Covariant because a Response only hands its result out, never consumes it,
+ * so a handler can declare the union of results it may answer with while each
+ * return path constructs one concrete type.
  *
  * @template-covariant TResult
  *

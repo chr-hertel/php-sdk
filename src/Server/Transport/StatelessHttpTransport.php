@@ -28,11 +28,8 @@ use Psr\Log\NullLogger;
 /**
  * Carries the modern (SEP-2575) lifecycle over HTTP.
  *
- * Deliberately not a mode of {@see StreamableHttpTransport}: that transport's
- * job is largely session management — minting an `Mcp-Session-Id`, resuming a
- * suspended fiber against it, tearing it down on DELETE — and a modern request
- * has no session to manage. What is left is a POST in, one JSON-RPC message
- * out, and a status code the protocol has already chosen.
+ * Not a mode of {@see StreamableHttpTransport}, whose job is largely session
+ * management; without a session what is left is a POST in, one message out.
  *
  * @author Christopher Hertel <mail@christopher-hertel.de>
  */
@@ -70,13 +67,9 @@ final class StatelessHttpTransport
     }
 
     /**
-     * Browser-facing protections that have nothing to do with which protocol
-     * era is in play.
-     *
-     * Notably absent is the protocol-version middleware the handshake
-     * transport installs: in the modern era the version travels in each
-     * request's `_meta` and is checked against the header there, so a
-     * middleware inspecting only the header would be judging half the story.
+     * Browser-facing protections, era-independent. The protocol-version
+     * middleware is absent: here the version travels in `_meta`, so a
+     * header-only check would judge half the story.
      *
      * @return list<MiddlewareInterface>
      */
@@ -104,8 +97,7 @@ final class StatelessHttpTransport
             return $this->responseFactory->createResponse(204);
         }
 
-        // No GET-opened notification stream and no DELETE teardown: without a
-        // session there is nothing for either to address.
+        // No GET stream and no DELETE teardown: there is no session to address.
         if ('POST' !== $request->getMethod()) {
             return $this->json(
                 json_encode(Error::forInvalidRequest(\sprintf('The modern lifecycle accepts POST only, got %s.', $request->getMethod())), \JSON_THROW_ON_ERROR),
@@ -152,19 +144,16 @@ final class StatelessHttpTransport
         $callback = static function () use ($frames, $logger): void {
             try {
                 foreach ($frames() as $frame) {
-                    // A null frame is a keep-alive tick, not a message: it goes
-                    // out as an SSE comment, which the client ignores and which
-                    // gives PHP the write it needs to notice a dropped peer.
+                    // A null frame is a keep-alive tick: an SSE comment the
+                    // client ignores, and the write PHP needs to spot a drop.
                     echo null === $frame
                         ? ": keep-alive\n\n"
                         : 'data: '.json_encode($frame, \JSON_THROW_ON_ERROR | \JSON_UNESCAPED_SLASHES)."\n\n";
                     flush();
                 }
             } catch (\Throwable $e) {
-                // The status line and headers are long gone by the time a frame
-                // fails, so there is no way to turn this into an error response.
-                // Log it and let the stream end; the client sees a close without
-                // the graceful-closure frame, which is exactly what it means.
+                // Headers are long sent, so this cannot become an error
+                // response; the client sees a close without the closure frame.
                 $logger->error('Subscription stream ended with an error.', ['exception' => $e]);
             }
         };

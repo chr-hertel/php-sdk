@@ -14,11 +14,8 @@ namespace Mcp\Exception;
 /**
  * An echoed `requestState` failed verification.
  *
- * The message is a fixed reason code — `malformed`, `mac` or `expired` — and
- * deliberately nothing more. The value came back through the client, so
- * whoever sent it may be probing: a message that distinguished "signed by a
- * different key" from "signed correctly but for another request" would tell an
- * attacker which half of the forgery to fix.
+ * The message is a bare reason code — `malformed`, `mac` or `expired` —
+ * because whoever sent the value may be probing.
  *
  * @author Christopher Hertel <mail@christopher-hertel.de>
  */

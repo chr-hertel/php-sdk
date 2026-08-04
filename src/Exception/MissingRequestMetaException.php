@@ -12,10 +12,8 @@
 namespace Mcp\Exception;
 
 /**
- * A modern-era request omitted metadata the server structurally needs to
- * answer it — the protocol version or the client's capabilities.
- *
- * Answered with a JSON-RPC `-32602 Invalid params` error and HTTP 400.
+ * A modern-era request omitted the protocol version or client capabilities.
+ * Answered with `-32602 Invalid params` and HTTP 400.
  *
  * @author Christopher Hertel <mail@christopher-hertel.de>
  */

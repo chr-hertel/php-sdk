@@ -26,10 +26,8 @@ use Mcp\Server\RequestContext;
 /**
  * Fixture handlers for the multi round-trip request scenarios (SEP-2322).
  *
- * Each is the same two-branch shape: with no answers yet, describe what is
- * needed and hand back state; with answers, finish the work. The branch is
- * decided by whether the request carried an input context, which is the only
- * thing distinguishing the two rounds — they are independent requests.
+ * Each has the same shape: with no answers yet, describe what is needed; with
+ * answers, finish the work.
  */
 final class MrtrElements
 {
@@ -78,10 +76,7 @@ final class MrtrElements
         return new CallToolResult([new TextContent('Roots received.')]);
     }
 
-    /**
-     * Asks for everything it needs in one result — the client answers all
-     * three and retries once, rather than making a round trip per question.
-     */
+    /** Asks for everything in one result, so the client retries once. */
     public static function multipleInputs(RequestContext $context): CallToolResult|InputRequiredResult
     {
         $input = $context->getInputContext();
@@ -104,13 +99,9 @@ final class MrtrElements
     }
 
     /**
-     * Asks twice in sequence, reading which round it is out of the state
-     * rather than out of the answers.
-     *
-     * The distinction matters: a client retrying round two sends only round
-     * two's answer, so counting answers would read that as a fresh start and
-     * loop forever. The state is the server's only memory across rounds, and
-     * this is what it is for.
+     * Reads the round out of the state, not the answers: a client retrying
+     * round two sends only round two's answer, so counting answers would read
+     * that as a fresh start and loop forever.
      */
     public static function multiRound(RequestContext $context): CallToolResult|InputRequiredResult
     {
@@ -137,10 +128,7 @@ final class MrtrElements
         return new CallToolResult([new TextContent('All steps complete.')]);
     }
 
-    /**
-     * Reaches the second round only when the echoed state verified, so a
-     * tampered value can never produce this result.
-     */
+    /** Reaches the second round only when the echoed state verified. */
     public static function tamperedState(RequestContext $context): CallToolResult|InputRequiredResult
     {
         $input = $context->getInputContext();
@@ -158,11 +146,8 @@ final class MrtrElements
     }
 
     /**
-     * Only ever asks for what the client said it can answer.
-     *
-     * Servers MUST NOT send an inputRequest for a capability the client did
-     * not declare, so the ask is assembled from the declared set rather than
-     * from what the tool would ideally like to have.
+     * Assembles the ask from the declared capabilities: a server MUST NOT
+     * request input the client never said it could supply.
      */
     public static function capabilities(RequestContext $context): CallToolResult|InputRequiredResult
     {
@@ -189,8 +174,7 @@ final class MrtrElements
             );
         }
 
-        // Nothing the client can service: finish rather than ask for something
-        // that could never come back.
+        // Nothing the client can service; asking would never come back.
         if ([] === $requests) {
             return new CallToolResult([new TextContent('No supported input capabilities.')]);
         }
@@ -217,11 +201,7 @@ final class MrtrElements
         return [['role' => 'user', 'content' => \sprintf('Hello, %s!', self::nameFrom($input->response(self::ELICIT_KEY)))]];
     }
 
-    /**
-     * The client's elicitation answer, as far as this fixture cares about it.
-     * A declined or cancelled answer has no content, so the greeting falls back
-     * rather than the tool failing — the round trip still completed.
-     */
+    /** A declined or cancelled answer has no content, so the greeting falls back. */
     private static function nameFrom(mixed $response): string
     {
         $content = \is_array($response) ? ($response['content'] ?? null) : null;

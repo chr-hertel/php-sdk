@@ -46,9 +46,6 @@ class RequestStateCodecTest extends TestCase
         $codec = new RequestStateCodec(self::KEY);
         $state = $codec->mint(['admin' => false]);
 
-        // The conformance suite tampers by appending, which is the cheapest
-        // thing an attacker can try; the payload edit below is the one that
-        // would actually be worth something if it went through.
         foreach ([$state.'-TAMPERED', substr($state, 0, -2), str_replace('.', 'X.', $state)] as $tampered) {
             try {
                 $codec->verify($tampered);
@@ -65,9 +62,7 @@ class RequestStateCodecTest extends TestCase
         $mine = new RequestStateCodec(self::KEY);
         $theirs = new RequestStateCodec(self::OTHER_KEY);
 
-        // Body from one, MAC from the other: the halves are individually
-        // well-formed, which is exactly the forgery a length check alone would
-        // let through.
+        // Body from one, MAC from the other: each half is well-formed alone.
         [$body] = explode('.', $mine->mint(['admin' => false]));
         [, $mac] = explode('.', $theirs->mint(['admin' => true]));
 
@@ -111,8 +106,7 @@ class RequestStateCodecTest extends TestCase
             $codec->verify((new RequestStateCodec(self::OTHER_KEY))->mint(['secret' => 'value']));
             $this->fail('Expected rejection.');
         } catch (RequestStateException $e) {
-            // The value came back through the client, so whoever sent it may be
-            // probing. Anything beyond a category is a hint.
+            // Anything beyond a category is a hint to whoever is probing.
             $this->assertContains($e->getMessage(), ['malformed', 'mac', 'expired']);
             $this->assertStringNotContainsString('secret', $e->getMessage());
         }

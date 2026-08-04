@@ -12,18 +12,11 @@
 namespace Mcp\Server\Stateless;
 
 /**
- * What a retry brought back with it: the client's answers to a previous
- * {@see \Mcp\Schema\Result\InputRequiredResult}, and the state that result
- * carried, already verified.
+ * What a retry brought back: the client's answers to a previous
+ * {@see \Mcp\Schema\Result\InputRequiredResult}, keyed as its `inputRequests`
+ * were, plus the verified state that result carried.
  *
- * A handler uses this to tell the two rounds apart. On the first call there is
- * no input context at all; on the retry there is one, and whatever the handler
- * sealed into `requestState` is available again — which is the only memory it
- * gets, since nothing on the server survives between the rounds.
- *
- * Answers are keyed by the identifiers the handler chose for its
- * `inputRequests`. Keys it does not recognize are simply never asked for: the
- * spec has servers ignore what they do not need rather than reject it.
+ * Absent on a first call, which is how a handler tells the rounds apart.
  *
  * @author Christopher Hertel <mail@christopher-hertel.de>
  */

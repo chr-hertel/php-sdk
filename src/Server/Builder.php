@@ -250,17 +250,12 @@ final class Builder
     }
 
     /**
-     * Sets the key that signs the `requestState` carried across the rounds of a
-     * multi round-trip request (SEP-2322).
+     * Sets the key signing the `requestState` carried across the rounds of a
+     * multi round-trip request (SEP-2322). Without one, every echoed state is
+     * refused.
      *
-     * Required before a handler can seal state into an
-     * {@see \Mcp\Schema\Result\InputRequiredResult}: without a key the server
-     * has no way to tell its own state from something a client made up, and
-     * every echoed state is refused.
-     *
-     * The same key must reach every instance that might serve the retry — the
-     * point of the pattern is that any of them can — so a per-process random
-     * value only works for a single-process deployment.
+     * The same key must reach every instance that might serve the retry, so a
+     * per-process random value only works for a single-process deployment.
      *
      * @param string $key at least 32 bytes
      * @param int    $ttl how long a minted state stays valid, in seconds
@@ -710,11 +705,9 @@ final class Builder
     /**
      * Builds a dispatcher for the modern (SEP-2575) lifecycle.
      *
-     * Everything the server exposes — tools, prompts, resources, and the
-     * handlers that serve them — is era-independent and shared with
-     * {@see self::build()}; only the dispatch model differs. So one builder
-     * configuration can drive either lifecycle, and a server can offer both at
-     * once by mounting each on its own endpoint.
+     * Tools, prompts, resources and their handlers are era-independent, so one
+     * builder configuration drives either lifecycle and a server can offer both
+     * by mounting each on its own endpoint.
      *
      * @param list<ProtocolVersion> $supportedVersions revisions this dispatcher will answer for
      */

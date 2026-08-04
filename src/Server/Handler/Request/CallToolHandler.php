@@ -30,8 +30,8 @@ use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 
 /**
- * A tools/call can answer with the tool's output or, under MRTR, with a request
- * for the input the tool still needs — hence the two result types.
+ * A tools/call answers with the tool's output or, under MRTR, with a request
+ * for the input it still needs.
  *
  * @implements RequestHandlerInterface<CallToolResult|InputRequiredResult>
  *
@@ -103,10 +103,7 @@ final class CallToolHandler implements RequestHandlerInterface
         try {
             $result = $this->referenceHandler->handle($reference, $arguments);
 
-            // An MRTR ask is a result in its own right, not tool output: the
-            // tool has not produced a value yet, so wrapping it as content
-            // would report a completed call that returned a description of
-            // what it still needs.
+            // An ask is a result in its own right, not tool output.
             if ($result instanceof InputRequiredResult) {
                 return new Response($request->getId(), $result);
             }
@@ -147,11 +144,8 @@ final class CallToolHandler implements RequestHandlerInterface
 
             return new Response($request->getId(), $result);
         } catch (MissingRequiredClientCapabilityException $e) {
-            // Not a tool failure: the tool could not run at all because the
-            // request itself was unservable. Reporting it as a tool result
-            // would tell the client the call succeeded and merely returned an
-            // error, when what it needs to know is to retry while declaring
-            // the capability. Rethrown for the dispatcher to render as -32021.
+            // Not a tool failure — the request was unservable, and the client
+            // needs to retry declaring the capability. Rendered as -32021.
             throw $e;
         } catch (ToolCallException $e) {
             $this->logger->error(\sprintf('Error while executing tool "%s": "%s".', $toolName, $e->getMessage()), [

@@ -15,31 +15,19 @@ use Mcp\Exception\InvalidArgumentException;
 use Mcp\Exception\RequestStateException;
 
 /**
- * Seals and verifies the opaque `requestState` a server carries across the
- * rounds of a multi round-trip request (SEP-2322).
+ * Seals and verifies the opaque `requestState` carried across the rounds of a
+ * multi round-trip request (SEP-2322).
  *
- * The state exists because the modern era keeps no session: a server that
- * needs more input has nowhere to remember why, so it hands its own context to
- * the client and gets it back on the retry. That round trip is the whole
- * security problem. The value passes through the client, so on return it is
- * attacker-controlled — the spec requires servers to treat it as such and to
- * reject anything that fails verification.
- *
- * So the wire value is `base64url(payload) . '.' . base64url(HMAC)`, and
- * {@see self::verify()} refuses it unless the MAC matches and the stamped
- * expiry is still in the future. The payload is signed, not encrypted: it is
- * protected against tampering, not against being read, so callers must not put
- * anything in it the client may not see.
+ * The value is `base64url(payload).base64url(HMAC)`. It passes through the
+ * client, so it is attacker-controlled on return and
+ * {@see self::verify()} refuses anything whose MAC or expiry does not hold.
+ * Signed, not encrypted: nothing secret belongs in the payload.
  *
  * @author Christopher Hertel <mail@christopher-hertel.de>
  */
 final class RequestStateCodec
 {
-    /**
-     * Rejecting a key this short is not pedantry: the MAC is the only thing
-     * standing between a client-held blob and the server trusting its
-     * contents, and a short key makes it forgeable.
-     */
+    /** Below this the MAC — the only thing making the blob trustworthy — is forgeable. */
     public const MINIMUM_KEY_BYTES = 32;
 
     private const ALGORITHM = 'sha256';
@@ -88,8 +76,7 @@ final class RequestStateCodec
         $expected = $this->sign($body);
         $actual = self::decode($mac);
 
-        // Constant-time, so the comparison cannot be turned into an oracle that
-        // reveals the correct MAC one byte at a time.
+        // Constant-time: a short-circuiting compare is a byte-at-a-time oracle.
         if (null === $actual || !hash_equals($expected, $actual)) {
             throw new RequestStateException('mac');
         }
@@ -111,9 +98,7 @@ final class RequestStateCodec
             throw new RequestStateException('malformed');
         }
 
-        // Bounds how long a captured state stays useful. It does not make the
-        // state single-use — a server that must consume one exactly once has to
-        // enforce that itself, with storage this codec deliberately does not have.
+        // Bounds replay; does not make the state single-use.
         if ($claims['exp'] < ($now ?? time())) {
             throw new RequestStateException('expired');
         }
