@@ -13,8 +13,6 @@ namespace Mcp\Server\Stateless;
 
 use Mcp\Schema\JsonRpc\Error;
 use Mcp\Schema\JsonRpc\MessageInterface;
-use Mcp\Schema\JsonRpc\Response;
-use Mcp\Schema\JsonRpc\ResultInterface;
 
 /**
  * One modern-era answer, paired with the HTTP status that carries it.
@@ -30,20 +28,29 @@ final class StatelessResult
 {
     /**
      * @param (\Closure(): \Generator<mixed>)|null $frames set instead of $message when the answer is a stream
+     * @param array<string, mixed>|null            $body   a result body already through the wire codec
      */
     private function __construct(
         public readonly ?MessageInterface $message,
         public readonly int $httpStatus,
         public readonly ?\Closure $frames = null,
+        private readonly ?array $body = null,
+        private readonly string|int $id = '',
     ) {
     }
 
     /**
-     * @param Response<ResultInterface> $response
+     * A successful answer whose result body the wire codec has already stamped.
+     *
+     * The body arrives as a plain array rather than a result object because the
+     * codec's job is to add fields the result classes deliberately do not model
+     * — once it has run, there is no object left that describes the payload.
+     *
+     * @param array<string, mixed> $body
      */
-    public static function ok(Response $response): self
+    public static function ok(string|int $id, array $body): self
     {
-        return new self($response, 200);
+        return new self(null, 200, null, $body, $id);
     }
 
     public static function error(Error $error, int $httpStatus): self
@@ -78,6 +85,14 @@ final class StatelessResult
 
     public function toJson(): string
     {
+        if (null !== $this->body) {
+            return json_encode([
+                'jsonrpc' => MessageInterface::JSONRPC_VERSION,
+                'id' => $this->id,
+                'result' => $this->body,
+            ], \JSON_THROW_ON_ERROR | \JSON_UNESCAPED_SLASHES);
+        }
+
         if (null === $this->message) {
             throw new \LogicException('A streaming result has no single JSON body; iterate its frames instead.');
         }

@@ -13,10 +13,9 @@ namespace Mcp\Schema\Result;
 
 use Mcp\Exception\InvalidArgumentException;
 use Mcp\Schema\Enum\ProtocolVersion;
-use Mcp\Schema\Implementation;
+use Mcp\Schema\Enum\ResultType;
 use Mcp\Schema\JsonRpc\ResultInterface;
 use Mcp\Schema\ServerCapabilities;
-use Mcp\Server\Stateless\RequestMeta;
 
 /**
  * The server's response to a `server/discover` request.
@@ -39,7 +38,6 @@ class DiscoverResult implements ResultInterface
     public function __construct(
         public readonly array $supportedVersions,
         public readonly ServerCapabilities $capabilities,
-        public readonly ?Implementation $serverInfo = null,
         public readonly ?string $instructions = null,
     ) {
         if ([] === $this->supportedVersions) {
@@ -48,11 +46,14 @@ class DiscoverResult implements ResultInterface
     }
 
     /**
+     * Carries no `resultType`, caching hints or serverInfo identity: those are
+     * wire vocabulary, stamped by {@see \Mcp\Server\Wire\Rev2026Codec} on the
+     * way out. What is modelled here is only what discovery actually answers.
+     *
      * @return array{
      *     supportedVersions: list<string>,
      *     capabilities: ServerCapabilities,
      *     instructions?: string,
-     *     _meta?: array<string, mixed>,
      * }
      */
     public function jsonSerialize(): array
@@ -67,10 +68,6 @@ class DiscoverResult implements ResultInterface
 
         if (null !== $this->instructions) {
             $data['instructions'] = $this->instructions;
-        }
-
-        if (null !== $this->serverInfo) {
-            $data['_meta'] = [RequestMeta::SERVER_INFO => $this->serverInfo];
         }
 
         return $data;

@@ -17,13 +17,14 @@ use Mcp\JsonRpc\MessageFactory;
 use Mcp\Schema\Enum\ProtocolVersion;
 use Mcp\Schema\JsonRpc\Error;
 use Mcp\Schema\JsonRpc\Request;
-use Mcp\Schema\JsonRpc\Response;
 use Mcp\Schema\JsonRpc\ResultInterface;
 use Mcp\Schema\Result\DiscoverResult;
 use Mcp\Server\Configuration;
 use Mcp\Server\Handler\Request\RequestHandlerInterface;
 use Mcp\Server\Session\InMemorySessionStore;
 use Mcp\Server\Session\Session;
+use Mcp\Server\Wire\Rev2026Codec;
+use Mcp\Server\Wire\WireCodecInterface;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 
@@ -46,6 +47,8 @@ use Psr\Log\NullLogger;
  */
 final class StatelessProtocol
 {
+    private readonly WireCodecInterface $codec;
+
     /**
      * Methods the modern era deleted outright. They are answered as unknown
      * methods rather than as errors specific to each, because that is exactly
@@ -74,7 +77,9 @@ final class StatelessProtocol
         private readonly array $supportedVersions = [ProtocolVersion::V2026_07_28],
         private readonly LoggerInterface $logger = new NullLogger(),
         private readonly float $subscriptionLifetime = 30.0,
+        ?WireCodecInterface $codec = null,
     ) {
+        $this->codec = $codec ?? new Rev2026Codec($configuration->serverInfo);
     }
 
     /**
@@ -121,7 +126,7 @@ final class StatelessProtocol
         }
 
         if (self::DISCOVER_METHOD === $method) {
-            return StatelessResult::ok(new Response($id, $this->discover()));
+            return $this->encode($method, $id, $this->discover());
         }
 
         if (self::LISTEN_METHOD === $method) {
@@ -249,7 +254,6 @@ final class StatelessProtocol
         return new DiscoverResult(
             $this->supportedVersions,
             $this->configuration->capabilities,
-            $this->configuration->serverInfo,
             $this->configuration->instructions,
         );
     }
@@ -300,10 +304,26 @@ final class StatelessProtocol
                 return StatelessResult::error($result, 400);
             }
 
-            return StatelessResult::ok($result);
+            return $this->encode($method, $id, $result->result);
         }
 
         return StatelessResult::error(Error::forMethodNotFound(\sprintf('No handler found for method "%s".', $method), $id), 404);
+    }
+
+    /**
+     * Runs a result through the wire codec on its way out.
+     *
+     * The round-trip through JSON is what flattens the result — and everything
+     * nested inside it — into the plain arrays the codec stamps. Handing the
+     * codec objects instead would make it responsible for knowing how each one
+     * serializes, which is exactly the coupling this layer exists to avoid.
+     */
+    private function encode(string $method, string|int $id, ResultInterface $result): StatelessResult
+    {
+        /** @var array<string, mixed> $body */
+        $body = json_decode(json_encode($result, \JSON_THROW_ON_ERROR), true, flags: \JSON_THROW_ON_ERROR);
+
+        return StatelessResult::ok($id, $this->codec->encodeResult($method, $body));
     }
 
     /**
