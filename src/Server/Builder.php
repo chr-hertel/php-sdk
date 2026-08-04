@@ -55,6 +55,7 @@ use Mcp\Server\Session\InMemorySessionStore;
 use Mcp\Server\Session\SessionManager;
 use Mcp\Server\Session\SessionManagerInterface;
 use Mcp\Server\Session\SessionStoreInterface;
+use Mcp\Server\Stateless\StandardHeaderValidator;
 use Mcp\Server\Stateless\StatelessProtocol;
 use Psr\Container\ContainerInterface;
 use Psr\EventDispatcher\EventDispatcherInterface;
@@ -698,6 +699,7 @@ final class Builder
             configuration: $parts['configuration'],
             supportedVersions: $supportedVersions,
             logger: $parts['logger'],
+            headerValidator: new StandardHeaderValidator($parts['registry']),
         );
     }
 
@@ -709,6 +711,7 @@ final class Builder
      *     configuration: Configuration,
      *     messageFactory: MessageFactory,
      *     sessionManager: SessionManagerInterface,
+     *     registry: RegistryInterface,
      *     requestHandlers: list<RequestHandlerInterface<mixed>>,
      *     notificationHandlers: list<NotificationHandlerInterface>,
      * }
@@ -805,6 +808,7 @@ final class Builder
 
         return [
             'logger' => $logger,
+            'registry' => $registry,
             'configuration' => $configuration,
             'messageFactory' => $messageFactory,
             'sessionManager' => $sessionManager,
