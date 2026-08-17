@@ -1,0 +1,47 @@
+# Expected conformance failures for spec revision 2026-07-28.
+#
+# Separate from conformance-baseline.yml because the two revisions exercise
+# different lifecycles, not different servers: both suites run against the one
+# fixture at /, which serves whichever era a request claims. The dated baseline
+# covers the handshake era, this one the modern (SEP-2575) era.
+#
+# Entries are per-check (scenario:check-id) rather than whole scenarios where a
+# scenario is only partly failing, so the parts that work keep reporting and a
+# new regression inside them still fails the run.
+#
+# Run with:
+#   make conformance-draft-server
+#   make conformance-draft-client
+
+# The server speaks 2026-07-28 in full.
+server: []
+
+# The client speaks it too, apart from authorization: the SDK ships no OAuth
+# client, so every scenario that drives a flow has nothing to exercise. Same
+# gap the dated baseline records; 2026-07-28 adds the SEP-2468 `iss` and
+# SEP-2207 offline-access scenarios on top. Tracked in spec-report.md §3.2.
+client:
+  - auth/metadata-default
+  - auth/metadata-var1
+  - auth/metadata-var2
+  - auth/metadata-var3
+  - auth/metadata-issuer-mismatch
+  - auth/basic-cimd
+  - auth/pre-registration
+  - auth/scope-from-www-authenticate
+  - auth/scope-from-scopes-supported
+  - auth/scope-omitted-when-undefined
+  - auth/scope-step-up
+  - auth/scope-retry-limit
+  - auth/token-endpoint-auth-basic
+  - auth/token-endpoint-auth-post
+  - auth/token-endpoint-auth-none
+  - auth/offline-access-scope
+  - auth/offline-access-not-supported
+  - auth/authorization-server-migration:sep-2352-reregister-on-as-change
+  - auth/iss-supported
+  - auth/iss-not-advertised
+  - auth/iss-supported-missing
+  - auth/iss-wrong-issuer
+  - auth/iss-unexpected
+  - auth/iss-normalized
