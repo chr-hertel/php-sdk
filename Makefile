@@ -1,4 +1,13 @@
-.PHONY: deps-stable deps-low cs phpstan tests unit-tests integration-tests inspector-tests coverage ci ci-stable ci-lowest conformance-tests conformance-server conformance-client docs
+.PHONY: deps-stable deps-low cs phpstan tests unit-tests integration-tests inspector-tests coverage ci ci-stable ci-lowest conformance-tests conformance-server conformance-client conformance-draft conformance-draft-server conformance-draft-client docs
+
+# Pinned to the same version CI runs (see .github/workflows/pipeline.yaml), so
+# a local pass means a green pipeline. The 2026-07-28 scenarios ship on the
+# `alpha` dist-tag; `latest` (0.1.x) has none of them.
+#
+# To try a local conformance checkout instead:
+#   make conformance-draft-server CONFORMANCE="node ../conformance/dist/index.js"
+CONFORMANCE_VERSION ?= 0.2.0-alpha.11
+CONFORMANCE ?= npx --yes @modelcontextprotocol/conformance@$(CONFORMANCE_VERSION)
 
 deps-stable:
 	composer update --prefer-stable
@@ -31,14 +40,33 @@ conformance-server:
 	@echo "Waiting for server to start..."
 	@sleep 5
 	rm -rf tests/Conformance/results
-	cd tests/Conformance && npx @modelcontextprotocol/conformance server --url http://localhost:8000/ --output-dir results || true
+	cd tests/Conformance && $(CONFORMANCE) server --url http://localhost:8000/ --suite all --spec-version 2025-11-25 --expected-failures conformance-baseline.yml --output-dir results || true
 	php tests/Conformance/score.php server
 	docker compose -f tests/Conformance/Fixtures/docker-compose.yml down
 
 conformance-client:
 	rm -rf tests/Conformance/results
-	cd tests/Conformance && npx @modelcontextprotocol/conformance client --command "php $(CURDIR)/tests/Conformance/client.php" --suite all --expected-failures conformance-baseline.yml --output-dir results || true
+	cd tests/Conformance && $(CONFORMANCE) client --command "php $(CURDIR)/tests/Conformance/client.php" --suite all --spec-version 2025-11-25 --expected-failures conformance-baseline.yml --output-dir results || true
 	php tests/Conformance/score.php client
+
+# --- 2026-07-28 (SEP-2575 stateless lifecycle) ------------------------------
+# Same runner as above, different lifecycle: `--spec-version` is cumulative
+# across the dated revisions, but 2026-07-28 is the stateless wire, served from
+# its own endpoint against its own baseline.
+
+conformance-draft: conformance-draft-server conformance-draft-client
+
+conformance-draft-server:
+	docker compose -f tests/Conformance/Fixtures/docker-compose.yml up -d
+	@echo "Waiting for server to start..."
+	@sleep 5
+	rm -rf tests/Conformance/results-2026-07-28
+	cd tests/Conformance && $(CONFORMANCE) server --url http://localhost:8000/ --suite all --spec-version 2026-07-28 --expected-failures conformance-baseline-2026-07-28.yml --output-dir results-2026-07-28 || true
+	docker compose -f tests/Conformance/Fixtures/docker-compose.yml down
+
+conformance-draft-client:
+	rm -rf tests/Conformance/results-2026-07-28
+	cd tests/Conformance && $(CONFORMANCE) client --command "php $(CURDIR)/tests/Conformance/client.php" --suite all --spec-version 2026-07-28 --expected-failures conformance-baseline-2026-07-28.yml --output-dir results-2026-07-28 || true
 
 coverage:
 	XDEBUG_MODE=coverage vendor/bin/phpunit --testsuite=unit --coverage-html=coverage
