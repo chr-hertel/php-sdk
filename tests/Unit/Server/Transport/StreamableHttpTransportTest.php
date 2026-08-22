@@ -421,7 +421,7 @@ final class StreamableHttpTransportTest extends TestCase
             $transport->attachFiberToSession($fiber, Uuid::v4());
         });
         $transport->setOutgoingMessagesProvider(static fn (): array => []);
-        $transport->setResponseFinder(static fn (): null => null);
+        $transport->setResponseFinder(static fn () => null);
         $transport->setPendingRequestsProvider(static fn (): array => [
             ['request_id' => 1, 'timestamp' => $requestedAt, 'timeout' => 120],
         ]);
