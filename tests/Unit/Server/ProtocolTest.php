@@ -15,7 +15,10 @@ use Mcp\Event\ErrorEvent;
 use Mcp\Event\NotificationEvent;
 use Mcp\Event\RequestEvent;
 use Mcp\Event\ResponseEvent;
+use Mcp\Exception\LogicException;
+use Mcp\Exception\MissingRequiredClientCapabilityException;
 use Mcp\JsonRpc\MessageFactory;
+use Mcp\Schema\ClientCapabilities;
 use Mcp\Schema\Enum\LoggingLevel;
 use Mcp\Schema\JsonRpc\Error;
 use Mcp\Schema\JsonRpc\Response;
@@ -791,6 +794,101 @@ final class ProtocolTest extends TestCase
         $this->assertEquals(Error::INTERNAL_ERROR, $message['error']['code']);
         $this->assertSame('Internal server error.', $message['error']['message']);
         $this->assertStringNotContainsString('Unexpected error', $message['error']['message']);
+    }
+
+    #[TestDox('Handler throwing MissingRequiredClientCapabilityException returns -32021, as the modern era does')]
+    public function testHandlerMissingClientCapabilityReturnsCapabilityError(): void
+    {
+        $required = new ClientCapabilities(roots: false, sampling: true);
+
+        $handler = $this->createMock(RequestHandlerInterface::class);
+        $handler->method('supports')->willReturn(true);
+        $handler->method('handle')->willThrowException(new MissingRequiredClientCapabilityException($required, 'needs sampling'));
+
+        $message = $this->dispatchToHandler($handler);
+
+        $this->assertArrayHasKey('error', $message);
+        $this->assertEquals(Error::MISSING_REQUIRED_CLIENT_CAPABILITY, $message['error']['code']);
+        $this->assertSame('needs sampling', $message['error']['message']);
+        $this->assertSame(['sampling' => []], $message['error']['data']['requiredCapabilities']);
+    }
+
+    #[TestDox('Handler throwing the SDK LogicException echoes its guidance, as the modern era does')]
+    public function testHandlerSdkLogicExceptionEchoesMessage(): void
+    {
+        $handler = $this->createMock(RequestHandlerInterface::class);
+        $handler->method('supports')->willReturn(true);
+        $handler->method('handle')->willThrowException(new LogicException('Call Builder::setRequestState() first.'));
+
+        $message = $this->dispatchToHandler($handler);
+
+        $this->assertArrayHasKey('error', $message);
+        $this->assertEquals(Error::INTERNAL_ERROR, $message['error']['code']);
+        $this->assertSame('Call Builder::setRequestState() first.', $message['error']['message']);
+    }
+
+    #[TestDox('A plain \LogicException stays a generic internal error')]
+    public function testHandlerPlainLogicExceptionStaysGeneric(): void
+    {
+        $handler = $this->createMock(RequestHandlerInterface::class);
+        $handler->method('supports')->willReturn(true);
+        $handler->method('handle')->willThrowException(new \LogicException('a dependency detail'));
+
+        $message = $this->dispatchToHandler($handler);
+
+        $this->assertArrayHasKey('error', $message);
+        $this->assertEquals(Error::INTERNAL_ERROR, $message['error']['code']);
+        $this->assertSame('Internal server error.', $message['error']['message']);
+    }
+
+    /**
+     * Runs one tools/call through a protocol with the given handler and
+     * returns the decoded message it queued.
+     *
+     * @param RequestHandlerInterface<\Mcp\Schema\JsonRpc\ResultInterface> $handler
+     *
+     * @return array<string, mixed>
+     */
+    private function dispatchToHandler(RequestHandlerInterface $handler): array
+    {
+        $session = $this->createMock(SessionInterface::class);
+
+        $this->sessionManager->method('createWithId')->willReturn($session);
+        $this->sessionManager->method('exists')->willReturn(true);
+
+        $queue = [];
+        $session->method('get')->willReturnCallback(static function ($key, $default = null) use (&$queue) {
+            if ('_mcp.outgoing_queue' === $key) {
+                return $queue;
+            }
+
+            return $default;
+        });
+
+        $session->method('set')->willReturnCallback(static function ($key, $value) use (&$queue) {
+            if ('_mcp.outgoing_queue' === $key) {
+                $queue = $value;
+            }
+        });
+
+        $protocol = new Protocol(
+            requestHandlers: [$handler],
+            notificationHandlers: [],
+            messageFactory: MessageFactory::make(),
+            sessionManager: $this->sessionManager,
+        );
+
+        $sessionId = Uuid::v4();
+        $protocol->processInput(
+            $this->transport,
+            '{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "test"}}',
+            $sessionId
+        );
+
+        $outgoing = $protocol->consumeOutgoingMessages($sessionId);
+        $this->assertCount(1, $outgoing);
+
+        return json_decode($outgoing[0]['message'], true);
     }
 
     #[TestDox('Notification handler exceptions are caught and logged')]
