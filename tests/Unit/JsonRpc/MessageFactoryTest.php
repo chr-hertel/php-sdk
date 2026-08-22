@@ -13,6 +13,7 @@ namespace Mcp\Tests\Unit\JsonRpc;
 
 use Mcp\Exception\InvalidArgumentException;
 use Mcp\Exception\InvalidInputMessageException;
+use Mcp\Exception\UnknownMethodException;
 use Mcp\JsonRpc\MessageFactory;
 use Mcp\Schema\JsonRpc\Error;
 use Mcp\Schema\JsonRpc\Response;
@@ -248,7 +249,8 @@ final class MessageFactoryTest extends TestCase
         $results = $this->factory->create($json);
 
         $this->assertCount(1, $results);
-        $this->assertInstanceOf(InvalidInputMessageException::class, $results[0]);
+        $this->assertInstanceOf(UnknownMethodException::class, $results[0]);
+        $this->assertSame('unknown/method', $results[0]->getMethod());
         $this->assertStringContainsString('Unknown method', $results[0]->getMessage());
     }
 
@@ -259,7 +261,8 @@ final class MessageFactoryTest extends TestCase
         $results = $this->factory->create($json);
 
         $this->assertCount(1, $results);
-        $this->assertInstanceOf(InvalidInputMessageException::class, $results[0]);
+        $this->assertInstanceOf(UnknownMethodException::class, $results[0]);
+        $this->assertSame('notifications/unknown', $results[0]->getMethod());
         $this->assertStringContainsString('Unknown method', $results[0]->getMessage());
     }
 

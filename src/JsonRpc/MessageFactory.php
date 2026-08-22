@@ -13,6 +13,7 @@ namespace Mcp\JsonRpc;
 
 use Mcp\Exception\InvalidArgumentException;
 use Mcp\Exception\InvalidInputMessageException;
+use Mcp\Exception\UnknownMethodException;
 use Mcp\Schema;
 use Mcp\Schema\JsonRpc\Error;
 use Mcp\Schema\JsonRpc\MessageInterface;
@@ -201,7 +202,7 @@ final class MessageFactory
      *
      * @return class-string<Request>|class-string<Notification>
      *
-     * @throws InvalidInputMessageException
+     * @throws UnknownMethodException
      */
     private function findMessageClassByMethod(string $method): string
     {
@@ -211,6 +212,6 @@ final class MessageFactory
             }
         }
 
-        throw new InvalidInputMessageException(\sprintf('Unknown method "%s".', $method));
+        throw new UnknownMethodException($method);
     }
 }
