@@ -241,11 +241,12 @@ final class Registry implements RegistryInterface
             return new Page($tools, null);
         }
 
-        $paginatedTools = $this->paginateResults($tools, $limit, $cursor);
+        $offset = $this->decodeCursor($cursor, \count($tools));
+        $paginatedTools = $this->paginateResults($tools, $limit, $offset);
 
         $nextCursor = $this->calculateNextCursor(
             \count($tools),
-            $cursor,
+            $offset,
             $limit
         );
 
@@ -279,11 +280,12 @@ final class Registry implements RegistryInterface
             return new Page($resources, null);
         }
 
-        $paginatedResources = $this->paginateResults($resources, $limit, $cursor);
+        $offset = $this->decodeCursor($cursor, \count($resources));
+        $paginatedResources = $this->paginateResults($resources, $limit, $offset);
 
         $nextCursor = $this->calculateNextCursor(
             \count($resources),
-            $cursor,
+            $offset,
             $limit
         );
 
@@ -334,11 +336,12 @@ final class Registry implements RegistryInterface
             return new Page($templates, null);
         }
 
-        $paginatedTemplates = $this->paginateResults($templates, $limit, $cursor);
+        $offset = $this->decodeCursor($cursor, \count($templates));
+        $paginatedTemplates = $this->paginateResults($templates, $limit, $offset);
 
         $nextCursor = $this->calculateNextCursor(
             \count($templates),
-            $cursor,
+            $offset,
             $limit
         );
 
@@ -372,11 +375,12 @@ final class Registry implements RegistryInterface
             return new Page($prompts, null);
         }
 
-        $paginatedPrompts = $this->paginateResults($prompts, $limit, $cursor);
+        $offset = $this->decodeCursor($cursor, \count($prompts));
+        $paginatedPrompts = $this->paginateResults($prompts, $limit, $offset);
 
         $nextCursor = $this->calculateNextCursor(
             \count($prompts),
-            $cursor,
+            $offset,
             $limit
         );
 
@@ -391,23 +395,44 @@ final class Registry implements RegistryInterface
     }
 
     /**
-     * Calculate next cursor for pagination.
+     * Decode a pagination cursor into an offset, validating it once for the whole request.
      *
-     * @param int         $totalItems    Count of all items
-     * @param string|null $currentCursor Current cursor position
-     * @param int         $limit         Number requested/returned per page
+     * @param string|null $cursor     Base64 encoded offset position
+     * @param int         $totalItems Count of all items
+     *
+     * @throws InvalidCursorException When cursor is invalid (MCP error code -32602)
      */
-    private function calculateNextCursor(int $totalItems, ?string $currentCursor, int $limit): ?string
+    private function decodeCursor(?string $cursor, int $totalItems): int
     {
-        $currentOffset = 0;
-
-        if (null !== $currentCursor) {
-            $decodedCursor = base64_decode($currentCursor, true);
-            if (false !== $decodedCursor && is_numeric($decodedCursor)) {
-                $currentOffset = (int) $decodedCursor;
-            }
+        if (null === $cursor) {
+            return 0;
         }
 
+        $decodedCursor = base64_decode($cursor, true);
+
+        if (false === $decodedCursor || !is_numeric($decodedCursor)) {
+            throw new InvalidCursorException($cursor);
+        }
+
+        $offset = (int) $decodedCursor;
+
+        // Validate offset is within reasonable bounds
+        if ($offset < 0 || $offset > $totalItems) {
+            throw new InvalidCursorException($cursor);
+        }
+
+        return $offset;
+    }
+
+    /**
+     * Calculate next cursor for pagination.
+     *
+     * @param int $totalItems    Count of all items
+     * @param int $currentOffset Current offset position, as decoded by decodeCursor()
+     * @param int $limit         Number requested/returned per page
+     */
+    private function calculateNextCursor(int $totalItems, int $currentOffset, int $limit): ?string
+    {
         $nextOffset = $currentOffset + $limit;
 
         if ($nextOffset < $totalItems) {
@@ -420,32 +445,14 @@ final class Registry implements RegistryInterface
     /**
      * Helper method to paginate results using cursor-based pagination.
      *
-     * @param array<int|string, mixed> $items  The full array of items to paginate The full array of items to paginate
+     * @param array<int|string, mixed> $items  The full array of items to paginate
      * @param int                      $limit  Maximum number of items to return
-     * @param string|null              $cursor Base64 encoded offset position
+     * @param int                      $offset Offset position, as decoded by decodeCursor()
      *
      * @return array<int|string, mixed> Paginated results
-     *
-     * @throws InvalidCursorException When cursor is invalid (MCP error code -32602)
      */
-    private function paginateResults(array $items, int $limit, ?string $cursor = null): array
+    private function paginateResults(array $items, int $limit, int $offset): array
     {
-        $offset = 0;
-        if (null !== $cursor) {
-            $decodedCursor = base64_decode($cursor, true);
-
-            if (false === $decodedCursor || !is_numeric($decodedCursor)) {
-                throw new InvalidCursorException($cursor);
-            }
-
-            $offset = (int) $decodedCursor;
-
-            // Validate offset is within reasonable bounds
-            if ($offset < 0 || $offset > \count($items)) {
-                throw new InvalidCursorException($cursor);
-            }
-        }
-
         return array_values(\array_slice($items, $offset, $limit));
     }
 }
