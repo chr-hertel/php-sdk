@@ -26,7 +26,7 @@ use Mcp\Schema\Enum\Role;
  * @author Kyrian Obikwelu <koshnawaza@gmail.com>
  * @author Mateu Aguiló Bosch <mateu@mateuaguilo.com>
  */
-final class PromptResultFormatter
+final class PromptResultFormatter implements PromptResultFormatterInterface
 {
     /**
      * Formats the raw result of a prompt generator into an array of MCP PromptMessages.

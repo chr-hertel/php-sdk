@@ -23,7 +23,7 @@ use Mcp\Schema\Content\TextResourceContents;
  * @author Kyrian Obikwelu <koshnawaza@gmail.com>
  * @author Mateu Aguiló Bosch <mateu@mateuaguilo.com>
  */
-final class ResourceResultFormatter
+final class ResourceResultFormatter implements ResourceResultFormatterInterface
 {
     /**
      * Formats the raw result of a resource read operation into MCP ResourceContent items.

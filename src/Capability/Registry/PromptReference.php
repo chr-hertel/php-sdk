@@ -12,6 +12,7 @@
 namespace Mcp\Capability\Registry;
 
 use Mcp\Capability\Formatter\PromptResultFormatter;
+use Mcp\Capability\Formatter\PromptResultFormatterInterface;
 use Mcp\Schema\Content\PromptMessage;
 use Mcp\Schema\Prompt;
 
@@ -30,6 +31,7 @@ class PromptReference extends ElementReference
         public readonly Prompt $prompt,
         \Closure|array|string $handler,
         public readonly array $completionProviders = [],
+        private readonly PromptResultFormatterInterface $formatter = new PromptResultFormatter(),
     ) {
         parent::__construct($handler);
     }
@@ -46,6 +48,6 @@ class PromptReference extends ElementReference
      */
     public function formatResult(mixed $promptGenerationResult): array
     {
-        return (new PromptResultFormatter())->format($promptGenerationResult);
+        return $this->formatter->format($promptGenerationResult);
     }
 }
