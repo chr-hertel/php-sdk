@@ -121,6 +121,46 @@ class DiscoveryStateTest extends TestCase
         $this->assertSame(['drop://{id}'], array_keys($obsolete->getResourceTemplates()));
     }
 
+    public function testAddKeysEachKindByItsIdentity(): void
+    {
+        $tool = $this->tool('t');
+        $resource = $this->resource('r://x');
+        $prompt = $this->prompt('p');
+        $template = $this->template('x://{id}');
+
+        $state = (new DiscoveryState())
+            ->add($tool)
+            ->add($resource)
+            ->add($prompt)
+            ->add($template);
+
+        $this->assertSame(['t' => $tool], $state->getTools());
+        $this->assertSame(['r://x' => $resource], $state->getResources());
+        $this->assertSame(['p' => $prompt], $state->getPrompts());
+        $this->assertSame(['x://{id}' => $template], $state->getResourceTemplates());
+    }
+
+    public function testAddReturnsNewStateAndLeavesOriginalUntouched(): void
+    {
+        $state = new DiscoveryState();
+
+        $next = $state->add($this->tool('t'));
+
+        $this->assertTrue($state->isEmpty());
+        $this->assertSame(1, $next->getElementCount());
+    }
+
+    public function testAddOverwritesEntryWithSameKey(): void
+    {
+        $replacement = $this->tool('t');
+
+        $state = (new DiscoveryState())
+            ->add($this->tool('t'))
+            ->add($replacement);
+
+        $this->assertSame(['t' => $replacement], $state->getTools());
+    }
+
     private function tool(string $name): ToolReference
     {
         return new ToolReference(
