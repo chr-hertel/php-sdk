@@ -91,7 +91,7 @@ final class Builder
 {
     private ?Implementation $serverInfo = null;
 
-    private RegistryInterface $registry;
+    private ?RegistryInterface $registry = null;
 
     private ?SubscriptionManagerInterface $subscriptionManager = null;
 
@@ -255,8 +255,6 @@ final class Builder
      */
     private array $loaders = [];
 
-    private bool $hasCustomRegistry = false;
-
     private bool $lazyLoading = true;
 
     private bool $headerValidation = true;
@@ -291,6 +289,8 @@ final class Builder
         ?string $websiteUrl = null,
         ?string $title = null,
     ): self {
+        $this->assertMutable();
+
         $this->serverInfo = new Implementation(trim($name), trim($version), $description, $icons, $websiteUrl, $title);
 
         return $this;
@@ -314,6 +314,8 @@ final class Builder
      */
     public function setNotificationBus(NotificationBusInterface $bus): self
     {
+        $this->assertMutable();
+
         $this->notificationBus = $bus;
 
         return $this;
@@ -330,6 +332,8 @@ final class Builder
      */
     public function setSubscriptionLifetime(float $seconds): self
     {
+        $this->assertMutable();
+
         $this->subscriptionLifetime = max(0.0, $seconds);
 
         return $this;
@@ -352,6 +356,8 @@ final class Builder
      */
     public function setCachePolicy(CachePolicy $policy): self
     {
+        $this->assertMutable();
+
         $this->cachePolicy = $policy;
 
         return $this;
@@ -370,6 +376,8 @@ final class Builder
      */
     public function setRequestState(string $key, int $ttl = 600): self
     {
+        $this->assertMutable();
+
         $this->requestStateKey = $key;
         $this->requestStateTtl = $ttl;
 
@@ -381,6 +389,8 @@ final class Builder
      */
     public function setPaginationLimit(int $paginationLimit): self
     {
+        $this->assertMutable();
+
         $this->paginationLimit = $paginationLimit;
 
         return $this;
@@ -395,6 +405,8 @@ final class Builder
      */
     public function setInstructions(?string $instructions): self
     {
+        $this->assertMutable();
+
         $this->instructions = $instructions;
 
         return $this;
@@ -405,6 +417,8 @@ final class Builder
      */
     public function setCapabilities(ServerCapabilities $serverCapabilities): self
     {
+        $this->assertMutable();
+
         $this->serverCapabilities = $serverCapabilities;
 
         return $this;
@@ -424,6 +438,8 @@ final class Builder
      */
     public function enableExtension(ExtensionInterface ...$extensions): self
     {
+        $this->assertMutable();
+
         foreach ($extensions as $extension) {
             $id = (string) $extension->getId();
 
@@ -466,6 +482,8 @@ final class Builder
      */
     public function addRequestHandler(RequestHandlerInterface $handler): self
     {
+        $this->assertMutable();
+
         $this->requestHandlers[] = $handler;
 
         return $this;
@@ -478,6 +496,8 @@ final class Builder
      */
     public function addRequestHandlers(iterable $handlers): self
     {
+        $this->assertMutable();
+
         foreach ($handlers as $handler) {
             $this->requestHandlers[] = $handler;
         }
@@ -490,6 +510,8 @@ final class Builder
      */
     public function addNotificationHandler(NotificationHandlerInterface $handler): self
     {
+        $this->assertMutable();
+
         $this->notificationHandlers[] = $handler;
 
         return $this;
@@ -502,6 +524,8 @@ final class Builder
      */
     public function addNotificationHandlers(iterable $handlers): self
     {
+        $this->assertMutable();
+
         foreach ($handlers as $handler) {
             $this->notificationHandlers[] = $handler;
         }
@@ -511,8 +535,9 @@ final class Builder
 
     public function setRegistry(RegistryInterface $registry): self
     {
+        $this->assertMutable();
+
         $this->registry = $registry;
-        $this->hasCustomRegistry = true;
 
         return $this;
     }
@@ -526,6 +551,8 @@ final class Builder
      */
     public function setLazyLoading(bool $lazyLoading = true): self
     {
+        $this->assertMutable();
+
         $this->lazyLoading = $lazyLoading;
 
         return $this;
@@ -541,6 +568,8 @@ final class Builder
      */
     public function setHeaderValidator(bool $headerValidation = true): self
     {
+        $this->assertMutable();
+
         $this->headerValidation = $headerValidation;
 
         return $this;
@@ -551,6 +580,8 @@ final class Builder
      */
     public function setLogger(LoggerInterface $logger): self
     {
+        $this->assertMutable();
+
         $this->logger = $logger;
 
         return $this;
@@ -558,6 +589,8 @@ final class Builder
 
     public function setEventDispatcher(EventDispatcherInterface $eventDispatcher): self
     {
+        $this->assertMutable();
+
         $this->eventDispatcher = $eventDispatcher;
 
         return $this;
@@ -569,6 +602,8 @@ final class Builder
      */
     public function setContainer(ContainerInterface $container): self
     {
+        $this->assertMutable();
+
         $this->container = $container;
 
         return $this;
@@ -576,6 +611,8 @@ final class Builder
 
     public function setSchemaGenerator(SchemaGeneratorInterface $schemaGenerator): self
     {
+        $this->assertMutable();
+
         $this->schemaGenerator = $schemaGenerator;
 
         return $this;
@@ -583,6 +620,8 @@ final class Builder
 
     public function setReferenceHandler(ReferenceHandlerInterface $referenceHandler): self
     {
+        $this->assertMutable();
+
         $this->referenceHandler = $referenceHandler;
 
         return $this;
@@ -590,6 +629,8 @@ final class Builder
 
     public function setDiscoverer(DiscovererInterface $discoverer): self
     {
+        $this->assertMutable();
+
         $this->discoverer = $discoverer;
 
         return $this;
@@ -597,6 +638,8 @@ final class Builder
 
     public function setResourceSubscriptionManager(SubscriptionManagerInterface $subscriptionManager): self
     {
+        $this->assertMutable();
+
         $this->subscriptionManager = $subscriptionManager;
 
         return $this;
@@ -614,6 +657,8 @@ final class Builder
         int $gcProbability = 1,
         int $gcDivisor = 100,
     ): self {
+        $this->assertMutable();
+
         $this->sessionStore = $sessionStore;
         $this->sessionManager = $sessionManager;
         $this->gcProbability = $gcProbability;
@@ -638,6 +683,8 @@ final class Builder
         ?CacheInterface $cache = null,
         array $namePatterns = DiscovererInterface::DEFAULT_NAME_PATERNS,
     ): self {
+        $this->assertMutable();
+
         $this->discoveryBasePath = $basePath;
         $this->discoveryScanDirs = $scanDirs;
         $this->discoveryExcludeDirs = $excludeDirs;
@@ -649,6 +696,8 @@ final class Builder
 
     public function setProtocolVersion(ProtocolVersion $protocolVersion): self
     {
+        $this->assertMutable();
+
         $this->protocolVersion = $protocolVersion;
 
         return $this;
@@ -675,6 +724,8 @@ final class Builder
         ?array $meta = null,
         ?array $outputSchema = null,
     ): self {
+        $this->assertMutable();
+
         $this->tools[] = compact(
             'handler',
             'name',
@@ -710,6 +761,8 @@ final class Builder
         ?array $icons = null,
         ?array $meta = null,
     ): self {
+        $this->assertMutable();
+
         $this->resources[] = compact(
             'handler',
             'uri',
@@ -743,6 +796,8 @@ final class Builder
         ?Annotations $annotations = null,
         ?array $meta = null,
     ): self {
+        $this->assertMutable();
+
         $this->resourceTemplates[] = compact(
             'handler',
             'uriTemplate',
@@ -772,6 +827,8 @@ final class Builder
         ?array $icons = null,
         ?array $meta = null,
     ): self {
+        $this->assertMutable();
+
         $this->prompts[] = compact('handler', 'name', 'title', 'description', 'icons', 'meta');
 
         return $this;
@@ -797,6 +854,8 @@ final class Builder
         ElementHandlerInterface $handler,
         array $completionProviders = [],
     ): self {
+        $this->assertMutable();
+
         if ([] !== $completionProviders && ($definition instanceof Tool || $definition instanceof ResourceDefinition)) {
             throw new InvalidArgumentException(\sprintf('Completion providers are only supported on Prompt and ResourceTemplate definitions, got %s.', $definition::class));
         }
@@ -817,6 +876,8 @@ final class Builder
      */
     public function addLoader(LoaderInterface $loader): self
     {
+        $this->assertMutable();
+
         $this->loaders[] = $loader;
 
         return $this;
@@ -827,6 +888,8 @@ final class Builder
      */
     public function addLoaders(iterable $loaders): self
     {
+        $this->assertMutable();
+
         foreach ($loaders as $loader) {
             $this->loaders[] = $loader;
         }
@@ -849,6 +912,8 @@ final class Builder
      */
     public function withoutInputRequiredShim(): self
     {
+        $this->assertMutable();
+
         $this->inputRequiredShim = false;
 
         return $this;
@@ -864,6 +929,8 @@ final class Builder
      */
     public function setInputRequiredLimits(int $maxRounds, int $roundTimeout): self
     {
+        $this->assertMutable();
+
         if ($maxRounds < 1) {
             throw new InvalidArgumentException('maxRounds must be at least 1.');
         }
@@ -896,6 +963,8 @@ final class Builder
      */
     public function withoutModernEra(): self
     {
+        $this->assertMutable();
+
         $this->modernVersions = [];
 
         return $this;
@@ -911,6 +980,8 @@ final class Builder
      */
     public function setModernVersions(array $versions): self
     {
+        $this->assertMutable();
+
         foreach ($versions as $version) {
             if (!$version->isModern()) {
                 throw new InvalidArgumentException(\sprintf('"%s" is a handshake-era revision; a request claiming it never reaches the modern leg to be served.', $version->value));
@@ -999,6 +1070,20 @@ final class Builder
     }
 
     /**
+     * Guards every setter and add method: the first build() resolves the
+     * configuration once, and both eras share that wiring, so a later change
+     * could never take effect. Failing loudly beats accepting it silently.
+     *
+     * @throws LogicException when the configuration was already built
+     */
+    private function assertMutable(): void
+    {
+        if (null !== $this->parts) {
+            throw new LogicException('Builder is frozen after build(); create a new builder to change the configuration.');
+        }
+    }
+
+    /**
      * @return AssembledParts
      */
     private function resolve(): array
@@ -1043,7 +1128,7 @@ final class Builder
 
         $chainLoader = new ChainLoader($loaders);
 
-        if ($this->hasCustomRegistry) {
+        if (null !== $this->registry) {
             // Builder can't inject the loader into an already-constructed instance, so load it eagerly.
             $registry = $this->registry;
             $chainLoader->load($registry);
