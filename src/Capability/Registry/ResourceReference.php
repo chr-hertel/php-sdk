@@ -12,6 +12,7 @@
 namespace Mcp\Capability\Registry;
 
 use Mcp\Capability\Formatter\ResourceResultFormatter;
+use Mcp\Capability\Formatter\ResourceResultFormatterInterface;
 use Mcp\Schema\Content\ResourceContents;
 use Mcp\Schema\ResourceDefinition;
 
@@ -28,6 +29,7 @@ class ResourceReference extends ElementReference
     public function __construct(
         public readonly ResourceDefinition $resource,
         callable|array|string $handler,
+        private readonly ResourceResultFormatterInterface $formatter = new ResourceResultFormatter(),
     ) {
         parent::__construct($handler);
     }
@@ -54,6 +56,6 @@ class ResourceReference extends ElementReference
      */
     public function formatResult(mixed $readResult, string $uri, ?string $mimeType = null): array
     {
-        return (new ResourceResultFormatter())->format($readResult, $uri, $mimeType, $this->resource->meta);
+        return $this->formatter->format($readResult, $uri, $mimeType, $this->resource->meta);
     }
 }

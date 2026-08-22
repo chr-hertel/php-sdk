@@ -12,6 +12,7 @@
 namespace Mcp\Capability\Registry;
 
 use Mcp\Capability\Formatter\ToolResultFormatter;
+use Mcp\Capability\Formatter\ToolResultFormatterInterface;
 use Mcp\Schema\Content\Content;
 use Mcp\Schema\Enum\ProtocolVersion;
 use Mcp\Schema\Tool;
@@ -29,6 +30,7 @@ class ToolReference extends ElementReference
     public function __construct(
         public readonly Tool $tool,
         callable|array|string $handler,
+        private readonly ToolResultFormatterInterface $formatter = new ToolResultFormatter(),
     ) {
         parent::__construct($handler);
     }
@@ -54,7 +56,7 @@ class ToolReference extends ElementReference
      */
     public function formatResult(mixed $toolExecutionResult): array
     {
-        return (new ToolResultFormatter())->format($toolExecutionResult);
+        return $this->formatter->format($toolExecutionResult);
     }
 
     /**
