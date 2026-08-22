@@ -197,6 +197,45 @@ final class BuilderTest extends TestCase
         $builder->buildStateless();
     }
 
+    #[TestDox('Repeated build() calls share the one resolved wiring')]
+    public function testRepeatedBuildSharesOneWiring(): void
+    {
+        $loader = $this->createMock(LoaderInterface::class);
+        $loader->expects($this->once())->method('load');
+
+        $builder = Server::builder()
+            ->setServerInfo('test', '1.0.0')
+            ->setLazyLoading(false)
+            ->addLoader($loader);
+
+        $builder->build();
+        $builder->build();
+    }
+
+    #[TestDox('A setter called after build() throws instead of silently changing nothing')]
+    public function testSetterAfterBuildThrows(): void
+    {
+        $builder = Server::builder()->setServerInfo('test', '1.0.0');
+        $builder->build();
+
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessage('Builder is frozen after build()');
+
+        $builder->setPaginationLimit(10);
+    }
+
+    #[TestDox('An element added after buildStateless() throws instead of never surfacing')]
+    public function testAddToolAfterBuildStatelessThrows(): void
+    {
+        $builder = Server::builder()->setServerInfo('test', '1.0.0');
+        $builder->buildStateless();
+
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessage('Builder is frozen after build()');
+
+        $builder->addTool(static fn (): string => 'late', name: 'late_tool');
+    }
+
     #[TestDox('A built server carries a dispatcher for each era, so one endpoint serves both')]
     public function testBuildProducesBothEras(): void
     {
