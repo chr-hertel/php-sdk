@@ -14,7 +14,7 @@ namespace Mcp\Exception;
 /**
  * @author Tobias Nyholm <tobias.nyholm@gmail.com>
  */
-final class ToolNotFoundException extends \RuntimeException implements NotFoundExceptionInterface
+final class ToolNotFoundException extends RuntimeException implements NotFoundExceptionInterface
 {
     public function __construct(
         public readonly string $name,

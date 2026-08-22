@@ -14,7 +14,7 @@ namespace Mcp\Exception;
 /**
  * @author Tobias Nyholm <tobias.nyholm@gmail.com>
  */
-final class InvalidCursorException extends \InvalidArgumentException implements ExceptionInterface
+final class InvalidCursorException extends InvalidArgumentException
 {
     public function __construct(
         public readonly string $cursor,
