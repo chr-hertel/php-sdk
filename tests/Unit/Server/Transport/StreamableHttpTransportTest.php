@@ -138,6 +138,7 @@ final class StreamableHttpTransportTest extends TestCase
             $logger,
             [],
         );
+        $this->connectNoOpProtocol($transport);
 
         $response = $transport->listen();
 
@@ -332,6 +333,7 @@ final class StreamableHttpTransportTest extends TestCase
             ->withBody($this->factory->createStream('{}'));
 
         $transport = new StreamableHttpTransport($request, $this->factory, $this->factory, null, [], maxBodyBytes: 1024);
+        $this->connectNoOpProtocol($transport);
 
         $response = $transport->listen();
 
@@ -345,6 +347,16 @@ final class StreamableHttpTransportTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
 
         new StreamableHttpTransport($request, $this->factory, $this->factory, null, [], maxBodyBytes: 0);
+    }
+
+    /**
+     * A transport used without Protocol::connect() throws; these tests only
+     * exercise the HTTP layer, so wire the minimal no-op callbacks instead.
+     */
+    private function connectNoOpProtocol(StreamableHttpTransport $transport): void
+    {
+        $transport->onMessage(static function (): void {});
+        $transport->setOutgoingMessagesProvider(static fn (): array => []);
     }
 
     private function stubAuth401(): MiddlewareInterface
