@@ -19,6 +19,7 @@ use Mcp\Capability\Registry\ResourceReference;
 use Mcp\Capability\Registry\ResourceTemplateReference;
 use Mcp\Capability\Registry\ToolReference;
 use Mcp\Capability\RegistryInterface;
+use Mcp\Exception\InvalidCursorException;
 use Mcp\Exception\PromptNotFoundException;
 use Mcp\Exception\ResourceNotFoundException;
 use Mcp\Exception\ToolNotFoundException;
@@ -737,6 +738,81 @@ class RegistryTest extends TestCase
         $registry->load();
 
         $this->assertFalse($registry->hasTools());
+    }
+
+    public function testGetToolsPaginatesWithValidCursor(): void
+    {
+        $this->registry->registerTool($this->createValidTool('tool1'), static fn () => 'result');
+        $this->registry->registerTool($this->createValidTool('tool2'), static fn () => 'result');
+        $this->registry->registerTool($this->createValidTool('tool3'), static fn () => 'result');
+
+        $firstPage = $this->registry->getTools(limit: 2);
+        $this->assertCount(2, $firstPage);
+        $this->assertSame(base64_encode('2'), $firstPage->nextCursor);
+
+        $secondPage = $this->registry->getTools(limit: 2, cursor: $firstPage->nextCursor);
+        $this->assertCount(1, $secondPage);
+        $this->assertNull($secondPage->nextCursor);
+    }
+
+    /**
+     * @dataProvider provideInvalidCursors
+     */
+    public function testGetToolsThrowsExceptionForInvalidCursor(string $cursor): void
+    {
+        $this->registry->registerTool($this->createValidTool('tool1'), static fn () => 'result');
+
+        $this->expectException(InvalidCursorException::class);
+        $this->expectExceptionMessage(\sprintf('Invalid value for pagination parameter "cursor": "%s"', $cursor));
+
+        $this->registry->getTools(limit: 10, cursor: $cursor);
+    }
+
+    /**
+     * @dataProvider provideInvalidCursors
+     */
+    public function testGetResourcesThrowsExceptionForInvalidCursor(string $cursor): void
+    {
+        $this->registry->registerResource($this->createValidResource('file:///test.txt'), static fn () => 'content');
+
+        $this->expectException(InvalidCursorException::class);
+
+        $this->registry->getResources(limit: 10, cursor: $cursor);
+    }
+
+    /**
+     * @dataProvider provideInvalidCursors
+     */
+    public function testGetResourceTemplatesThrowsExceptionForInvalidCursor(string $cursor): void
+    {
+        $this->registry->registerResourceTemplate($this->createValidResourceTemplate('file:///{name}'), static fn () => 'content');
+
+        $this->expectException(InvalidCursorException::class);
+
+        $this->registry->getResourceTemplates(limit: 10, cursor: $cursor);
+    }
+
+    /**
+     * @dataProvider provideInvalidCursors
+     */
+    public function testGetPromptsThrowsExceptionForInvalidCursor(string $cursor): void
+    {
+        $this->registry->registerPrompt($this->createValidPrompt('prompt1'), static fn () => 'result');
+
+        $this->expectException(InvalidCursorException::class);
+
+        $this->registry->getPrompts(limit: 10, cursor: $cursor);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function provideInvalidCursors(): iterable
+    {
+        yield 'not base64' => ['not-base64!!'];
+        yield 'base64 but not numeric' => [base64_encode('abc')];
+        yield 'negative offset' => [base64_encode('-1')];
+        yield 'offset beyond total items' => [base64_encode('999')];
     }
 
     private function toolLoader(Tool $tool): LoaderInterface
