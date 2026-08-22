@@ -36,13 +36,6 @@ use Symfony\Component\Finder\Finder;
 use Symfony\Component\Finder\SplFileInfo;
 
 /**
- * @phpstan-type DiscoveredCount array{
- *     tools: int,
- *     resources: int,
- *     prompts: int,
- *     resourceTemplates: int,
- * }
- *
  * @internal
  *
  * @author Kyrian Obikwelu <koshnawaza@gmail.com>
@@ -73,19 +66,10 @@ final class Discoverer implements DiscovererInterface
     public function discover(string $basePath, array $directories, array $excludeDirs = [], array $namePatterns = self::DEFAULT_NAME_PATERNS): DiscoveryState
     {
         $startTime = microtime(true);
-        $discoveredCount = [
-            'tools' => 0,
-            'resources' => 0,
-            'prompts' => 0,
-            'resourceTemplates' => 0,
-        ];
 
         $namePatterns = !empty($namePatterns) ? $namePatterns : self::DEFAULT_NAME_PATERNS;
 
-        $tools = [];
-        $resources = [];
-        $prompts = [];
-        $resourceTemplates = [];
+        $state = new DiscoveryState();
 
         try {
             $finder = new Finder();
@@ -112,7 +96,7 @@ final class Discoverer implements DiscovererInterface
                 ->name($namePatterns);
 
             foreach ($finder as $file) {
-                $this->processFile($file, $discoveredCount, $tools, $resources, $prompts, $resourceTemplates);
+                $state = $this->processFile($file, $state);
             }
         } catch (\Throwable $e) {
             $this->logger->error('Error during file finding process for MCP discovery'.json_encode($e->getTrace(), \JSON_PRETTY_PRINT), [
@@ -121,40 +105,30 @@ final class Discoverer implements DiscovererInterface
         }
 
         $duration = microtime(true) - $startTime;
-        $this->logger->info('Attribute discovery finished.', [
-            'duration_sec' => round($duration, 3),
-            'tools' => $discoveredCount['tools'],
-            'resources' => $discoveredCount['resources'],
-            'prompts' => $discoveredCount['prompts'],
-            'resourceTemplates' => $discoveredCount['resourceTemplates'],
-        ]);
+        $this->logger->info('Attribute discovery finished.', ['duration_sec' => round($duration, 3)] + $state->getElementCounts());
 
-        return new DiscoveryState($tools, $resources, $prompts, $resourceTemplates);
+        return $state;
     }
 
     /**
      * Process a single PHP file for MCP elements on classes or methods.
      *
-     * @param DiscoveredCount                          $discoveredCount
-     * @param array<string, ToolReference>             $tools
-     * @param array<string, ResourceReference>         $resources
-     * @param array<string, PromptReference>           $prompts
-     * @param array<string, ResourceTemplateReference> $resourceTemplates
+     * Returns the given discovery state extended by the elements found in the file.
      */
-    private function processFile(SplFileInfo $file, array &$discoveredCount, array &$tools, array &$resources, array &$prompts, array &$resourceTemplates): void
+    private function processFile(SplFileInfo $file, DiscoveryState $state): DiscoveryState
     {
         $className = $this->getClassFromFile($file);
         if (!$className) {
             $this->logger->warning('No valid class found in file', ['file' => $file->getPathname()]);
 
-            return;
+            return $state;
         }
 
         try {
             $reflectionClass = new \ReflectionClass($className);
 
             if ($reflectionClass->isAbstract() || $reflectionClass->isInterface() || $reflectionClass->isTrait() || $reflectionClass->isEnum()) {
-                return;
+                return $state;
             }
 
             $processedViaClassAttribute = false;
@@ -165,7 +139,9 @@ final class Discoverer implements DiscovererInterface
                     foreach ($attributeTypes as $attributeType) {
                         $classAttribute = $reflectionClass->getAttributes($attributeType, \ReflectionAttribute::IS_INSTANCEOF)[0] ?? null;
                         if ($classAttribute) {
-                            $this->processMethod($invokeMethod, $discoveredCount, $classAttribute, $tools, $resources, $prompts, $resourceTemplates);
+                            if ($reference = $this->processMethod($invokeMethod, $classAttribute)) {
+                                $state = $state->add($reference);
+                            }
                             $processedViaClassAttribute = true;
                             break;
                         }
@@ -185,7 +161,9 @@ final class Discoverer implements DiscovererInterface
                     foreach ($attributeTypes as $attributeType) {
                         $methodAttribute = $method->getAttributes($attributeType, \ReflectionAttribute::IS_INSTANCEOF)[0] ?? null;
                         if ($methodAttribute) {
-                            $this->processMethod($method, $discoveredCount, $methodAttribute, $tools, $resources, $prompts, $resourceTemplates);
+                            if ($reference = $this->processMethod($method, $methodAttribute)) {
+                                $state = $state->add($reference);
+                            }
                             break;
                         }
                     }
@@ -200,115 +178,127 @@ final class Discoverer implements DiscovererInterface
                 'exception' => $e,
             ]);
         }
+
+        return $state;
     }
 
     /**
-     * Process a method with a given MCP attribute instance.
+     * Build the element reference for a method carrying a given MCP attribute.
      * Can be called for regular methods or the __invoke method of an invokable class.
      *
-     * @param \ReflectionMethod                                                       $method            The target method (e.g., regular method or __invoke).
-     * @param DiscoveredCount                                                         $discoveredCount   pass by reference to update counts
-     * @param \ReflectionAttribute<McpTool|McpResource|McpPrompt|McpResourceTemplate> $attribute         the ReflectionAttribute instance found (on method or class)
-     * @param array<string, ToolReference>                                            $tools
-     * @param array<string, ResourceReference>                                        $resources
-     * @param array<string, PromptReference>                                          $prompts
-     * @param array<string, ResourceTemplateReference>                                $resourceTemplates
+     * @param \ReflectionMethod                                                       $method    The target method (e.g., regular method or __invoke).
+     * @param \ReflectionAttribute<McpTool|McpResource|McpPrompt|McpResourceTemplate> $attribute the ReflectionAttribute instance found (on method or class)
+     *
+     * @return ToolReference|ResourceReference|PromptReference|ResourceTemplateReference|null the discovered element, or null if the attribute could not be processed
      */
-    private function processMethod(\ReflectionMethod $method, array &$discoveredCount, \ReflectionAttribute $attribute, array &$tools, array &$resources, array &$prompts, array &$resourceTemplates): void
+    private function processMethod(\ReflectionMethod $method, \ReflectionAttribute $attribute): ToolReference|ResourceReference|PromptReference|ResourceTemplateReference|null
     {
-        $className = $method->getDeclaringClass()->getName();
-        $classShortName = $method->getDeclaringClass()->getShortName();
-        $methodName = $method->getName();
-        $attributeClassName = $attribute->getName();
-
         try {
             $instance = $attribute->newInstance();
 
-            switch ($attributeClassName) {
-                case McpTool::class:
-                    $docBlock = $this->docBlockParser->parseDocBlock($method->getDocComment() ?? null);
-                    $name = $instance->name ?? ('__invoke' === $methodName ? $classShortName : $methodName);
-                    $description = $instance->description ?? $this->docBlockParser->getDescription($docBlock) ?? null;
-                    $inputSchema = $this->schemaGenerator->generate($method);
-                    $outputSchema = $this->schemaGenerator->generateOutputSchema($method);
-                    $tool = new Tool(
-                        name: $name,
-                        title: $instance->title,
-                        inputSchema: $inputSchema,
-                        description: $description,
-                        annotations: $instance->annotations,
-                        icons: $instance->icons,
-                        meta: $instance->meta,
-                        outputSchema: $outputSchema,
-                    );
-                    $tools[$name] = new ToolReference($tool, [$className, $methodName]);
-                    ++$discoveredCount['tools'];
-                    break;
-
-                case McpResource::class:
-                    $docBlock = $this->docBlockParser->parseDocBlock($method->getDocComment() ?? null);
-                    $name = $instance->name ?? ('__invoke' === $methodName ? $classShortName : $methodName);
-                    $description = $instance->description ?? $this->docBlockParser->getDescription($docBlock) ?? null;
-                    $resource = new ResourceDefinition(
-                        $instance->uri,
-                        $name,
-                        $instance->title,
-                        $description,
-                        $instance->mimeType,
-                        $instance->annotations,
-                        $instance->size,
-                        $instance->icons,
-                        $instance->meta,
-                    );
-                    $resources[$instance->uri] = new ResourceReference($resource, [$className, $methodName]);
-
-                    ++$discoveredCount['resources'];
-                    break;
-
-                case McpPrompt::class:
-                    $docBlock = $this->docBlockParser->parseDocBlock($method->getDocComment() ?? null);
-                    $name = $instance->name ?? ('__invoke' === $methodName ? $classShortName : $methodName);
-                    $description = $instance->description ?? $this->docBlockParser->getDescription($docBlock) ?? null;
-                    $arguments = [];
-                    $paramTags = $this->docBlockParser->getParamTags($docBlock);
-                    foreach ($method->getParameters() as $param) {
-                        $reflectionType = $param->getType();
-                        if ($reflectionType instanceof \ReflectionNamedType && !$reflectionType->isBuiltin()) {
-                            continue;
-                        }
-                        $paramTag = $paramTags['$'.$param->getName()] ?? null;
-                        $arguments[] = new PromptArgument($param->getName(), $paramTag ? trim((string) $paramTag->getDescription()) : null, !$param->isOptional() && !$param->isDefaultValueAvailable());
-                    }
-                    $prompt = new Prompt($name, $instance->title, $description, $arguments, $instance->icons, $instance->meta);
-                    $completionProviders = $this->getCompletionProviders($method);
-                    $prompts[$name] = new PromptReference($prompt, [$className, $methodName], $completionProviders);
-                    ++$discoveredCount['prompts'];
-                    break;
-
-                case McpResourceTemplate::class:
-                    $docBlock = $this->docBlockParser->parseDocBlock($method->getDocComment() ?? null);
-                    $name = $instance->name ?? ('__invoke' === $methodName ? $classShortName : $methodName);
-                    $description = $instance->description ?? $this->docBlockParser->getDescription($docBlock) ?? null;
-                    $mimeType = $instance->mimeType;
-                    $annotations = $instance->annotations;
-                    $meta = $instance->meta ?? null;
-                    $resourceTemplate = new ResourceTemplate($instance->uriTemplate, $name, $instance->title, $description, $mimeType, $annotations, $meta);
-                    $completionProviders = $this->getCompletionProviders($method);
-                    $resourceTemplates[$instance->uriTemplate] = new ResourceTemplateReference($resourceTemplate, [$className, $methodName], $completionProviders);
-                    ++$discoveredCount['resourceTemplates'];
-                    break;
-            }
+            return match (true) {
+                $instance instanceof McpTool => $this->buildTool($method, $instance),
+                $instance instanceof McpResource => $this->buildResource($method, $instance),
+                $instance instanceof McpPrompt => $this->buildPrompt($method, $instance),
+                $instance instanceof McpResourceTemplate => $this->buildResourceTemplate($method, $instance),
+            };
         } catch (ExceptionInterface $e) {
-            $this->logger->error("Failed to process MCP attribute on {$className}::{$methodName}", [
-                'attribute' => $attributeClassName,
+            $this->logger->error(\sprintf('Failed to process MCP attribute on %s::%s', $method->getDeclaringClass()->getName(), $method->getName()), [
+                'attribute' => $attribute->getName(),
                 'exception' => $e,
             ]);
         } catch (\Throwable $e) {
-            $this->logger->error("Unexpected error processing attribute on {$className}::{$methodName}", [
-                'attribute' => $attributeClassName,
+            $this->logger->error(\sprintf('Unexpected error processing attribute on %s::%s', $method->getDeclaringClass()->getName(), $method->getName()), [
+                'attribute' => $attribute->getName(),
                 'exception' => $e,
             ]);
         }
+
+        return null;
+    }
+
+    private function buildTool(\ReflectionMethod $method, McpTool $attribute): ToolReference
+    {
+        $docBlock = $this->docBlockParser->parseDocBlock($method->getDocComment() ?? null);
+        $tool = new Tool(
+            name: $attribute->name ?? $this->defaultName($method),
+            title: $attribute->title,
+            inputSchema: $this->schemaGenerator->generate($method),
+            description: $attribute->description ?? $this->docBlockParser->getDescription($docBlock),
+            annotations: $attribute->annotations,
+            icons: $attribute->icons,
+            meta: $attribute->meta,
+            outputSchema: $this->schemaGenerator->generateOutputSchema($method),
+        );
+
+        return new ToolReference($tool, [$method->getDeclaringClass()->getName(), $method->getName()]);
+    }
+
+    private function buildResource(\ReflectionMethod $method, McpResource $attribute): ResourceReference
+    {
+        $docBlock = $this->docBlockParser->parseDocBlock($method->getDocComment() ?? null);
+        $resource = new ResourceDefinition(
+            $attribute->uri,
+            $attribute->name ?? $this->defaultName($method),
+            $attribute->title,
+            $attribute->description ?? $this->docBlockParser->getDescription($docBlock),
+            $attribute->mimeType,
+            $attribute->annotations,
+            $attribute->size,
+            $attribute->icons,
+            $attribute->meta,
+        );
+
+        return new ResourceReference($resource, [$method->getDeclaringClass()->getName(), $method->getName()]);
+    }
+
+    private function buildPrompt(\ReflectionMethod $method, McpPrompt $attribute): PromptReference
+    {
+        $docBlock = $this->docBlockParser->parseDocBlock($method->getDocComment() ?? null);
+        $arguments = [];
+        $paramTags = $this->docBlockParser->getParamTags($docBlock);
+        foreach ($method->getParameters() as $param) {
+            $reflectionType = $param->getType();
+            if ($reflectionType instanceof \ReflectionNamedType && !$reflectionType->isBuiltin()) {
+                continue;
+            }
+            $paramTag = $paramTags['$'.$param->getName()] ?? null;
+            $arguments[] = new PromptArgument($param->getName(), $paramTag ? trim((string) $paramTag->getDescription()) : null, !$param->isOptional() && !$param->isDefaultValueAvailable());
+        }
+        $prompt = new Prompt(
+            $attribute->name ?? $this->defaultName($method),
+            $attribute->title,
+            $attribute->description ?? $this->docBlockParser->getDescription($docBlock),
+            $arguments,
+            $attribute->icons,
+            $attribute->meta,
+        );
+
+        return new PromptReference($prompt, [$method->getDeclaringClass()->getName(), $method->getName()], $this->getCompletionProviders($method));
+    }
+
+    private function buildResourceTemplate(\ReflectionMethod $method, McpResourceTemplate $attribute): ResourceTemplateReference
+    {
+        $docBlock = $this->docBlockParser->parseDocBlock($method->getDocComment() ?? null);
+        $resourceTemplate = new ResourceTemplate(
+            $attribute->uriTemplate,
+            $attribute->name ?? $this->defaultName($method),
+            $attribute->title,
+            $attribute->description ?? $this->docBlockParser->getDescription($docBlock),
+            $attribute->mimeType,
+            $attribute->annotations,
+            $attribute->meta,
+        );
+
+        return new ResourceTemplateReference($resourceTemplate, [$method->getDeclaringClass()->getName(), $method->getName()], $this->getCompletionProviders($method));
+    }
+
+    /**
+     * Fall back to the method name, or the class short name for invokable classes.
+     */
+    private function defaultName(\ReflectionMethod $method): string
+    {
+        return '__invoke' === $method->getName() ? $method->getDeclaringClass()->getShortName() : $method->getName();
     }
 
     /**

@@ -73,6 +73,27 @@ final class DiscoveryState
     }
 
     /**
+     * Returns a new state with the given element added, keyed by its identity
+     * (tool and prompt name, resource URI, or resource template URI template).
+     */
+    public function add(ToolReference|ResourceReference|PromptReference|ResourceTemplateReference $reference): self
+    {
+        $tools = $this->tools;
+        $resources = $this->resources;
+        $prompts = $this->prompts;
+        $resourceTemplates = $this->resourceTemplates;
+
+        match (true) {
+            $reference instanceof ToolReference => $tools[$reference->tool->name] = $reference,
+            $reference instanceof ResourceReference => $resources[$reference->resource->uri] = $reference,
+            $reference instanceof PromptReference => $prompts[$reference->prompt->name] = $reference,
+            $reference instanceof ResourceTemplateReference => $resourceTemplates[$reference->resourceTemplate->uriTemplate] = $reference,
+        };
+
+        return new self($tools, $resources, $prompts, $resourceTemplates);
+    }
+
+    /**
      * Returns the subset of this state whose keys are absent from $next.
      *
      * Asymmetric by design: entries whose keys exist in both states are excluded
