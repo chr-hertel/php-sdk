@@ -52,8 +52,8 @@ class ClientCapabilities implements \JsonSerializable
      *     },
      *     sampling?: array{context?: mixed, tools?: mixed}|object,
      *     elicitation?: array{form?: mixed, url?: mixed}|object|bool,
-     *     experimental?: array<string, mixed>,
-     *     extensions?: array<string, mixed>,
+     *     experimental?: array<string, mixed>|object,
+     *     extensions?: array<string, mixed>|object,
      * } $data
      */
     public static function fromArray(array $data): self
@@ -94,13 +94,18 @@ class ClientCapabilities implements \JsonSerializable
             $elicitationForm = self::namesMode($data['elicitation'], 'form') || !$elicitationUrl;
         }
 
+        // Keyed maps arrive as objects on a live session and as arrays once
+        // round-tripped through JSON; read both.
+        $experimental = $data['experimental'] ?? null;
+        $extensions = $data['extensions'] ?? null;
+
         return new self(
             $rootsEnabled,
             $rootsListChanged,
             $sampling,
             $elicitation,
-            \is_array($data['experimental'] ?? null) ? $data['experimental'] : null,
-            \is_array($data['extensions'] ?? null) ? $data['extensions'] : null,
+            \is_object($experimental) ? (array) $experimental : (\is_array($experimental) ? $experimental : null),
+            \is_object($extensions) ? (array) $extensions : (\is_array($extensions) ? $extensions : null),
             $samplingContext,
             $samplingTools,
             $elicitationForm,
