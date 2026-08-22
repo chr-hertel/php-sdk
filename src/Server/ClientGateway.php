@@ -14,6 +14,7 @@ namespace Mcp\Server;
 use Mcp\Exception\ClientException;
 use Mcp\Exception\InvalidArgumentException;
 use Mcp\Exception\RuntimeException;
+use Mcp\Schema\ClientCapabilities;
 use Mcp\Schema\Content\AudioContent;
 use Mcp\Schema\Content\Content;
 use Mcp\Schema\Content\ImageContent;
@@ -285,10 +286,7 @@ class ClientGateway
      */
     public function supportsRoots(): bool
     {
-        $capabilities = (array) $this->session->get('client_capabilities', []);
-
-        // MCP spec: capability presence indicates support (value is typically {} or [])
-        return \array_key_exists('roots', $capabilities);
+        return true === $this->clientCapabilities()->roots;
     }
 
     /**
@@ -302,10 +300,7 @@ class ClientGateway
      */
     public function supportsElicitation(): bool
     {
-        $capabilities = (array) $this->session->get('client_capabilities', []);
-
-        // MCP spec: capability presence indicates support (value is typically {} or [])
-        return \array_key_exists('elicitation', $capabilities);
+        return true === $this->clientCapabilities()->elicitation;
     }
 
     /**
@@ -319,10 +314,7 @@ class ClientGateway
      */
     public function supportsSampling(): bool
     {
-        $capabilities = (array) $this->session->get('client_capabilities', []);
-
-        // MCP spec: capability presence indicates support (value is typically {} or [])
-        return \array_key_exists('sampling', $capabilities);
+        return true === $this->clientCapabilities()->sampling;
     }
 
     /**
@@ -337,7 +329,7 @@ class ClientGateway
      */
     public function supportsSamplingTools(): bool
     {
-        return $this->hasSubCapability('sampling', 'tools');
+        return true === $this->clientCapabilities()->samplingTools;
     }
 
     /**
@@ -350,7 +342,7 @@ class ClientGateway
      */
     public function supportsSamplingContext(): bool
     {
-        return $this->hasSubCapability('sampling', 'context');
+        return true === $this->clientCapabilities()->samplingContext;
     }
 
     /**
@@ -363,7 +355,7 @@ class ClientGateway
      */
     public function supportsElicitationUrl(): bool
     {
-        return $this->hasSubCapability('elicitation', 'url');
+        return true === $this->clientCapabilities()->elicitationUrl;
     }
 
     /**
@@ -378,25 +370,18 @@ class ClientGateway
      */
     public function supportsExtension(ExtensionIdentifier|string $id): bool
     {
-        return $this->hasSubCapability('extensions', (string) $id);
+        return \array_key_exists((string) $id, $this->clientCapabilities()->extensions ?? []);
     }
 
     /**
-     * Sub-capabilities are declared by the presence of a (possibly empty) object, so
-     * only the key matters — not whatever it holds. The value arrives as an object on
-     * a live session and as an array once the session has round-tripped through JSON,
-     * hence both shapes.
+     * The capabilities the client declared at initialization, hydrated from the
+     * session. The session holds the jsonSerialize() shape — object values on a
+     * live session, arrays once it has round-tripped through JSON — and
+     * {@see ClientCapabilities::fromArray()} reads both.
      */
-    private function hasSubCapability(string $capability, string $name): bool
+    private function clientCapabilities(): ClientCapabilities
     {
-        $capabilities = (array) $this->session->get('client_capabilities', []);
-        $declared = $capabilities[$capability] ?? null;
-
-        if (\is_array($declared)) {
-            return \array_key_exists($name, $declared);
-        }
-
-        return \is_object($declared) && property_exists($declared, $name);
+        return ClientCapabilities::fromArray((array) $this->session->get('client_capabilities', []));
     }
 
     /**
