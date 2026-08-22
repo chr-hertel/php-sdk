@@ -13,10 +13,8 @@ namespace Mcp\Schema;
 
 /**
  * @phpstan-type PageItem Tool|Prompt|ResourceTemplate|ResourceDefinition
- *
- * @extends \ArrayObject<int|string, PageItem>
  */
-final class Page extends \ArrayObject
+final class Page
 {
     /**
      * @param array<int|string, PageItem> $references Items can be Tool, Prompt, ResourceTemplate, or ResourceDefinition
@@ -25,11 +23,5 @@ final class Page extends \ArrayObject
         public readonly array $references,
         public readonly ?string $nextCursor,
     ) {
-        parent::__construct($references, \ArrayObject::ARRAY_AS_PROPS);
-    }
-
-    public function count(): int
-    {
-        return \count($this->references);
     }
 }

@@ -69,7 +69,7 @@ class RegistryTest extends TestCase
         $this->registry->registerTool($tool2, static fn () => 'result2');
 
         $tools = $this->registry->getTools();
-        $this->assertCount(2, $tools);
+        $this->assertCount(2, $tools->references);
         $this->assertArrayHasKey('tool1', $tools->references);
         $this->assertArrayHasKey('tool2', $tools->references);
         $this->assertInstanceOf(Tool::class, $tools->references['tool1']);
@@ -126,7 +126,7 @@ class RegistryTest extends TestCase
         $this->registry->registerResource($resource2, static fn () => 'content2');
 
         $resources = $this->registry->getResources();
-        $this->assertCount(2, $resources);
+        $this->assertCount(2, $resources->references);
         $this->assertArrayHasKey('test://resource1', $resources->references);
         $this->assertArrayHasKey('test://resource2', $resources->references);
         $this->assertInstanceOf(ResourceDefinition::class, $resources->references['test://resource1']);
@@ -183,7 +183,7 @@ class RegistryTest extends TestCase
         $this->registry->registerResourceTemplate($template2, static fn () => 'content2');
 
         $templates = $this->registry->getResourceTemplates();
-        $this->assertCount(2, $templates);
+        $this->assertCount(2, $templates->references);
         $this->assertArrayHasKey('test1://{id}', $templates->references);
         $this->assertArrayHasKey('test2://{category}', $templates->references);
         $this->assertInstanceOf(ResourceTemplate::class, $templates->references['test1://{id}']);
@@ -307,7 +307,7 @@ class RegistryTest extends TestCase
         $this->registry->registerPrompt($prompt2, static fn () => []);
 
         $prompts = $this->registry->getPrompts();
-        $this->assertCount(2, $prompts);
+        $this->assertCount(2, $prompts->references);
         $this->assertArrayHasKey('prompt1', $prompts->references);
         $this->assertArrayHasKey('prompt2', $prompts->references);
         $this->assertInstanceOf(Prompt::class, $prompts->references['prompt1']);
