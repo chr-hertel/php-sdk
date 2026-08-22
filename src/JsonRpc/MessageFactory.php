@@ -191,6 +191,8 @@ final class MessageFactory
             $messageClass = $this->findMessageClassByMethod($data['method']);
 
             return $messageClass::fromArray($data);
+        } catch (InvalidInputMessageException $e) {
+            throw $e;
         } catch (InvalidArgumentException $e) {
             throw new InvalidInputMessageException($e->getMessage(), 0, $e);
         }

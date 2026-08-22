@@ -22,7 +22,7 @@ use Mcp\Schema\ClientCapabilities;
  *
  * @author Christopher Hertel <mail@christopher-hertel.de>
  */
-class MissingRequiredClientCapabilityException extends \RuntimeException implements ExceptionInterface
+class MissingRequiredClientCapabilityException extends RuntimeException
 {
     public function __construct(
         public readonly ClientCapabilities $requiredCapabilities,

@@ -19,6 +19,6 @@ namespace Mcp\Exception;
  *
  * @author Kyrian Obikwelu <koshnawaza@gmail.com>
  */
-final class SamplingException extends \RuntimeException implements ExceptionInterface
+final class SamplingException extends RuntimeException
 {
 }

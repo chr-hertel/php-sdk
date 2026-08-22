@@ -14,6 +14,6 @@ namespace Mcp\Exception;
 /**
  * @author Tobias Nyholm <tobias.nyholm@gmail.com>
  */
-class HandlerNotFoundException extends \InvalidArgumentException implements NotFoundExceptionInterface
+class HandlerNotFoundException extends InvalidArgumentException implements NotFoundExceptionInterface
 {
 }

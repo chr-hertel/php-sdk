@@ -14,7 +14,7 @@ namespace Mcp\Exception;
 /**
  * @author Tobias Nyholm <tobias.nyholm@gmail.com>
  */
-class InvalidInputMessageException extends \InvalidArgumentException implements ExceptionInterface
+class InvalidInputMessageException extends InvalidArgumentException
 {
     private string|int|null $requestId = null;
 

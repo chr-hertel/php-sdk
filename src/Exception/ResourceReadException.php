@@ -14,6 +14,6 @@ namespace Mcp\Exception;
 /**
  * @author Tobias Nyholm <tobias.nyholm@gmail.com>
  */
-final class ResourceReadException extends \RuntimeException implements ExceptionInterface
+final class ResourceReadException extends RuntimeException
 {
 }
