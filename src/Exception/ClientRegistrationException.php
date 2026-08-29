@@ -11,7 +11,7 @@
 
 namespace Mcp\Exception;
 
-final class ClientRegistrationException extends \RuntimeException implements ExceptionInterface
+final class ClientRegistrationException extends RuntimeException
 {
     public function __construct(
         string $message,

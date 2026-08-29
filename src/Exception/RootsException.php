@@ -19,6 +19,6 @@ namespace Mcp\Exception;
  *
  * @author Johannes Wachter <johannes@sulu.io>
  */
-final class RootsException extends \RuntimeException implements ExceptionInterface
+final class RootsException extends RuntimeException
 {
 }

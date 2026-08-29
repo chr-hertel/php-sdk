@@ -14,7 +14,7 @@ namespace Mcp\Exception;
 /**
  * @author Tobias Nyholm <tobias.nyholm@gmail.com>
  */
-final class PromptNotFoundException extends \RuntimeException implements NotFoundExceptionInterface
+final class PromptNotFoundException extends RuntimeException implements NotFoundExceptionInterface
 {
     public function __construct(
         public readonly string $name,

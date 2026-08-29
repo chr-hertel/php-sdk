@@ -241,6 +241,18 @@ final class MessageFactoryTest extends TestCase
         $this->assertStringContainsString('missing', $results[0]->getMessage());
     }
 
+    public function testInvalidInputMessageExceptionIsNotReWrapped(): void
+    {
+        $missingMethod = $this->factory->create('{"jsonrpc": "2.0", "params": {}}');
+        $unknownMethod = $this->factory->create('{"jsonrpc": "2.0", "method": "unknown/method", "id": 1}');
+
+        foreach ([$missingMethod[0], $unknownMethod[0]] as $exception) {
+            $this->assertInstanceOf(InvalidInputMessageException::class, $exception);
+            $this->assertSame(InvalidInputMessageException::class, $exception::class);
+            $this->assertNull($exception->getPrevious());
+        }
+    }
+
     public function testUnknownMethod(): void
     {
         $json = '{"jsonrpc": "2.0", "method": "unknown/method", "id": 1}';
