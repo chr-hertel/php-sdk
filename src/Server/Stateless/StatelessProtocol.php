@@ -33,6 +33,8 @@ use Mcp\Server\Protocol;
 use Mcp\Server\Session\InMemorySessionStore;
 use Mcp\Server\Session\Session;
 use Mcp\Server\Subscription\NotificationBusInterface;
+use Mcp\Server\Suspension\NotificationSuspension;
+use Mcp\Server\Suspension\RequestSuspension;
 use Mcp\Server\Wire\CachePolicy;
 use Mcp\Server\Wire\InboundClassifier;
 use Mcp\Server\Wire\Rev2026Codec;
@@ -618,8 +620,8 @@ final class StatelessProtocol
      */
     private function readNotification(mixed $suspended, RequestMeta $meta): ?Notification
     {
-        if (!\is_array($suspended) || 'notification' !== ($suspended['type'] ?? null)) {
-            if (\is_array($suspended) && 'request' === ($suspended['type'] ?? null)) {
+        if (!$suspended instanceof NotificationSuspension) {
+            if ($suspended instanceof RequestSuspension) {
                 // Elicitation never reaches here — it is answered in run(). What
                 // is left are the kinds this revision removed outright, and no
                 // multi round-trip shape brings them back.
@@ -629,11 +631,7 @@ final class StatelessProtocol
             return null;
         }
 
-        $notification = $suspended['notification'] ?? null;
-
-        if (!$notification instanceof Notification) {
-            return null;
-        }
+        $notification = $suspended->notification;
 
         // The client opts into logs per request; with no level named the server
         // MUST NOT send any, which is why an absent level drops rather than
@@ -656,19 +654,11 @@ final class StatelessProtocol
      */
     private static function readElicitation(mixed $suspended): ?array
     {
-        if (!\is_array($suspended) || 'request' !== ($suspended['type'] ?? null)) {
+        if (!$suspended instanceof RequestSuspension || !$suspended->request instanceof ElicitRequest) {
             return null;
         }
 
-        $request = $suspended['request'] ?? null;
-
-        if (!$request instanceof ElicitRequest) {
-            return null;
-        }
-
-        $key = $suspended['input_key'] ?? null;
-
-        return [\is_string($key) ? $key : null, $request];
+        return [$suspended->inputKey, $suspended->request];
     }
 
     /**
