@@ -50,17 +50,17 @@ final class Container implements ContainerInterface
      */
     public function get(string $id): mixed
     {
-        // 1. Check instance cache
+        // Check instance cache
         if (isset($this->instances[$id])) {
             return $this->instances[$id];
         }
 
-        // 2. Check if class exists
+        // Check if class exists
         if (!class_exists($id) && !interface_exists($id)) { // Also check interface for bindings
             throw new ServiceNotFoundException(\sprintf('Class, interface, or entry "%s" not found.', $id));
         }
 
-        // 7. Circular Dependency Check
+        // Circular dependency check
         if (isset($this->resolving[$id])) {
             throw new ContainerException("Circular dependency detected while resolving '{$id}'. Resolution path: ".implode(' -> ', array_keys($this->resolving))." -> {$id}");
         }
@@ -68,7 +68,7 @@ final class Container implements ContainerInterface
         $this->resolving[$id] = true; // Mark as currently resolving
 
         try {
-            // 3. Reflect on the class
+            // Reflect on the class
             $reflector = new \ReflectionClass($id);
 
             // Check if class is instantiable (abstract classes, interfaces cannot be directly instantiated)
@@ -78,14 +78,14 @@ final class Container implements ContainerInterface
                 throw new ContainerException("Class '{$id}' is not instantiable (e.g., abstract class or interface without explicit binding).");
             }
 
-            // 4. Get the constructor
+            // Get the constructor
             $constructor = $reflector->getConstructor();
 
-            // 5. If no constructor or constructor has no parameters, instantiate directly
+            // If no constructor or constructor has no parameters, instantiate directly
             if (null === $constructor || 0 === $constructor->getNumberOfParameters()) {
                 $instance = $reflector->newInstance();
             } else {
-                // 6. Constructor has parameters, attempt to resolve them
+                // Constructor has parameters, attempt to resolve them
                 $parameters = $constructor->getParameters();
                 $resolvedArgs = [];
 
@@ -108,7 +108,7 @@ final class Container implements ContainerInterface
         } catch (\Throwable $e) { // Catch other instantiation errors
             throw new ContainerException("Failed to instantiate or resolve dependencies for '{$id}': ".$e->getMessage(), (int) $e->getCode(), $e);
         } finally {
-            // 7. Remove from resolving stack once done (success or failure)
+            // Remove from resolving stack once done (success or failure)
             unset($this->resolving[$id]);
         }
     }
@@ -168,12 +168,87 @@ final class Container implements ContainerInterface
 
     /**
      * Returns true if the container can return an entry for the given identifier.
-     * Checks explicitly set instances and if the class/interface exists.
-     * Does not guarantee `get()` will succeed if auto-wiring fails.
+     *
+     * Mirrors what get() can actually do: explicitly set instances, or classes
+     * whose constructor parameters are all auto-wirable.
      */
     public function has(string $id): bool
     {
-        return isset($this->instances[$id]) || class_exists($id) || interface_exists($id);
+        if (isset($this->instances[$id])) {
+            return true;
+        }
+
+        if (!class_exists($id)) {
+            return false;
+        }
+
+        return $this->canAutowire($id, []);
+    }
+
+    /**
+     * Checks whether get() would be able to build the given class, without instantiating it.
+     *
+     * @param array<string, true> $resolving classes currently being checked, to break circular dependencies
+     */
+    private function canAutowire(string $className, array $resolving): bool
+    {
+        if (isset($resolving[$className])) {
+            return false;
+        }
+        $resolving[$className] = true;
+
+        try {
+            $reflector = new \ReflectionClass($className);
+        } catch (\ReflectionException) {
+            return false;
+        }
+
+        if (!$reflector->isInstantiable()) {
+            return false;
+        }
+
+        $constructor = $reflector->getConstructor();
+        if (null === $constructor) {
+            return true;
+        }
+
+        foreach ($constructor->getParameters() as $parameter) {
+            if (!$this->canResolveParameter($parameter, $resolving)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Mirrors resolveParameter(): true if the parameter could be resolved without throwing.
+     *
+     * @param array<string, true> $resolving
+     */
+    private function canResolveParameter(\ReflectionParameter $parameter, array $resolving): bool
+    {
+        $type = $parameter->getType();
+
+        if ($type instanceof \ReflectionNamedType && !$type->isBuiltin()) {
+            $typeName = $type->getName();
+
+            if (isset($this->instances[$typeName])) {
+                return true;
+            }
+
+            if (class_exists($typeName) || interface_exists($typeName)) {
+                // resolveParameter() delegates to get(), which must succeed
+                return $this->canAutowire($typeName, $resolving);
+            }
+
+            // Unknown dependency is tolerated only for optional or nullable parameters
+            if (!$parameter->isOptional() && !$parameter->allowsNull()) {
+                return false;
+            }
+        }
+
+        return $parameter->isDefaultValueAvailable() || $parameter->allowsNull();
     }
 
     /**
