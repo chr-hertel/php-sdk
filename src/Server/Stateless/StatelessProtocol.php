@@ -16,6 +16,7 @@ use Mcp\Exception\LogicException;
 use Mcp\Exception\MissingRequestMetaException;
 use Mcp\Exception\MissingRequiredClientCapabilityException;
 use Mcp\Exception\RequestStateException;
+use Mcp\Exception\UnknownMethodException;
 use Mcp\JsonRpc\MessageFactory;
 use Mcp\Schema\Enum\ProtocolVersion;
 use Mcp\Schema\JsonRpc\Error;
@@ -412,18 +413,15 @@ final class StatelessProtocol
         $request = $messages[0] ?? null;
 
         // The factory hands back an exception object rather than throwing one,
-        // distinguishing a genuinely unknown method (-32601, the client should
-        // stop asking) from a known method the message could not otherwise be
-        // parsed into (-32600, the request itself is malformed).
-        if ($request instanceof InvalidInputMessageException) {
-            $unknownMethod = \sprintf('Unknown method "%s".', $method) === $request->getMessage();
+        // and its subtype distinguishes a genuinely unknown method (-32601, the
+        // client should stop asking) from a known method the message could not
+        // otherwise be parsed into (-32600, the request itself is malformed).
+        if ($request instanceof UnknownMethodException) {
+            return StatelessResult::error($this->unknownMethod($method, $id), 404);
+        }
 
-            return StatelessResult::error(
-                $unknownMethod
-                    ? $this->unknownMethod($method, $id)
-                    : Error::forInvalidRequest($request->getMessage(), $id),
-                $unknownMethod ? 404 : 400,
-            );
+        if ($request instanceof InvalidInputMessageException) {
+            return StatelessResult::error(Error::forInvalidRequest($request->getMessage(), $id), 400);
         }
 
         if (!$request instanceof Request) {

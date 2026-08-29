@@ -1083,6 +1083,18 @@ class StatelessProtocolTest extends TestCase
         $this->assertStringNotContainsString('extension', $answer['body']['error']['message']);
     }
 
+    #[TestDox('a known method with a malformed message is a bad request, not an unknown method')]
+    public function testMalformedKnownMethodIsInvalidRequest(): void
+    {
+        // No "name" parameter: the factory knows the method but cannot parse
+        // the message into it, which must stay -32600/400 while a genuinely
+        // unknown method stays -32601/404.
+        $answer = self::call(self::protocol(), 'tools/call');
+
+        $this->assertSame(400, $answer['status']);
+        $this->assertSame(Error::INVALID_REQUEST, $answer['body']['error']['code']);
+    }
+
     #[TestDox('a method of an extension this server does not serve says so by name')]
     public function testUnservedExtensionMethodNamesItsExtension(): void
     {
