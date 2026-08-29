@@ -20,7 +20,7 @@ use Mcp\Schema\Content\TextContent;
  * @author Kyrian Obikwelu <koshnawaza@gmail.com>
  * @author Mateu Aguiló Bosch <mateu@mateuaguilo.com>
  */
-final class ToolResultFormatter
+final class ToolResultFormatter implements ToolResultFormatterInterface
 {
     /**
      * Formats the result of a tool execution into an array of MCP Content items.
