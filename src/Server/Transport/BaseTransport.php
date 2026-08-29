@@ -11,6 +11,7 @@
 
 namespace Mcp\Server\Transport;
 
+use Mcp\Exception\LogicException;
 use Mcp\Schema\JsonRpc\Error;
 use Mcp\Schema\JsonRpc\Response;
 use Psr\Log\LoggerInterface;
@@ -34,8 +35,6 @@ use Symfony\Component\Uid\Uuid;
  */
 abstract class BaseTransport implements TransportInterface
 {
-    use ManagesTransportCallbacks;
-
     protected ?Uuid $sessionId = null;
 
     /**
@@ -44,6 +43,24 @@ abstract class BaseTransport implements TransportInterface
     protected ?\Fiber $sessionFiber = null;
 
     protected LoggerInterface $logger;
+
+    /** @var callable(TransportInterface<mixed>, string, ?Uuid): void */
+    protected $messageListener;
+
+    /** @var callable(Uuid): void */
+    protected $sessionEndListener;
+
+    /** @var callable(Uuid): array<int, array{message: string, context: array<string, mixed>}> */
+    protected $outgoingMessagesProvider;
+
+    /** @var callable(Uuid): array<int, array<string, mixed>> */
+    protected $pendingRequestsProvider;
+
+    /** @var callable(int, Uuid): Response<array<string, mixed>>|Error|null */
+    protected $responseFinder;
+
+    /** @var callable(FiberSuspend|null, ?Uuid): void */
+    protected $fiberYieldHandler;
 
     public function __construct(?LoggerInterface $logger = null)
     {
@@ -72,16 +89,56 @@ abstract class BaseTransport implements TransportInterface
         $this->sessionId = $sessionId;
     }
 
+    public function onMessage(callable $listener): void
+    {
+        $this->messageListener = $listener;
+    }
+
+    public function onSessionEnd(callable $listener): void
+    {
+        $this->sessionEndListener = $listener;
+    }
+
+    public function setOutgoingMessagesProvider(callable $provider): void
+    {
+        $this->outgoingMessagesProvider = $provider;
+    }
+
+    public function setPendingRequestsProvider(callable $provider): void
+    {
+        $this->pendingRequestsProvider = $provider;
+    }
+
+    /**
+     * @param callable(int, Uuid):(Response<array<string, mixed>>|Error|null) $finder
+     */
+    public function setResponseFinder(callable $finder): void
+    {
+        $this->responseFinder = $finder;
+    }
+
+    /**
+     * @param callable(FiberSuspend|null, ?Uuid): void $handler
+     */
+    public function setFiberYieldHandler(callable $handler): void
+    {
+        $this->fiberYieldHandler = $handler;
+    }
+
     /**
      * @return array<int, array{message: string, context: array<string, mixed>}>
      */
     protected function getOutgoingMessages(?Uuid $sessionId): array
     {
-        if ($sessionId && \is_callable($this->outgoingMessagesProvider)) {
-            return ($this->outgoingMessagesProvider)($sessionId);
+        if (!\is_callable($this->outgoingMessagesProvider)) {
+            throw $this->createNotConnectedException();
         }
 
-        return [];
+        if (null === $sessionId) {
+            return [];
+        }
+
+        return ($this->outgoingMessagesProvider)($sessionId);
     }
 
     /**
@@ -89,11 +146,15 @@ abstract class BaseTransport implements TransportInterface
      */
     protected function getPendingRequests(?Uuid $sessionId): array
     {
-        if ($sessionId && \is_callable($this->pendingRequestsProvider)) {
-            return ($this->pendingRequestsProvider)($sessionId);
+        if (!\is_callable($this->pendingRequestsProvider)) {
+            throw $this->createNotConnectedException();
         }
 
-        return [];
+        if (null === $sessionId) {
+            return [];
+        }
+
+        return ($this->pendingRequestsProvider)($sessionId);
     }
 
     /**
@@ -101,11 +162,15 @@ abstract class BaseTransport implements TransportInterface
      */
     protected function checkForResponse(int $requestId, ?Uuid $sessionId): Response|Error|null
     {
-        if ($sessionId && \is_callable($this->responseFinder)) {
-            return ($this->responseFinder)($requestId, $sessionId);
+        if (!\is_callable($this->responseFinder)) {
+            throw $this->createNotConnectedException();
         }
 
-        return null;
+        if (null === $sessionId) {
+            return null;
+        }
+
+        return ($this->responseFinder)($requestId, $sessionId);
     }
 
     /**
@@ -113,8 +178,12 @@ abstract class BaseTransport implements TransportInterface
      */
     protected function handleFiberYield(mixed $yielded, ?Uuid $sessionId): void
     {
-        if (null === $yielded || !\is_callable($this->fiberYieldHandler)) {
+        if (null === $yielded) {
             return;
+        }
+
+        if (!\is_callable($this->fiberYieldHandler)) {
+            throw $this->createNotConnectedException();
         }
 
         try {
@@ -129,15 +198,27 @@ abstract class BaseTransport implements TransportInterface
 
     protected function handleMessage(string $payload, ?Uuid $sessionId): void
     {
-        if (\is_callable($this->messageListener)) {
-            ($this->messageListener)($this, $payload, $sessionId);
+        if (!\is_callable($this->messageListener)) {
+            throw $this->createNotConnectedException();
         }
+
+        ($this->messageListener)($this, $payload, $sessionId);
     }
 
+    /**
+     * Intentionally tolerant of a missing listener: session end is a teardown
+     * notification, also reached via close() on error paths, where throwing
+     * would mask the original failure instead of surfacing a misuse.
+     */
     protected function handleSessionEnd(?Uuid $sessionId): void
     {
         if ($sessionId && \is_callable($this->sessionEndListener)) {
             ($this->sessionEndListener)($sessionId);
         }
+    }
+
+    private function createNotConnectedException(): LogicException
+    {
+        return new LogicException(\sprintf('Transport "%s" is not connected to a protocol; call Protocol::connect() before listen().', static::class));
     }
 }

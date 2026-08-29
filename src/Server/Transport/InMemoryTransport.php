@@ -31,11 +31,6 @@ class InMemoryTransport extends BaseTransport
         parent::__construct($logger);
     }
 
-    public function onMessage(callable $listener): void
-    {
-        $this->messageListener = $listener;
-    }
-
     public function send(string $data, array $context): void
     {
         if (isset($context['session_id'])) {
