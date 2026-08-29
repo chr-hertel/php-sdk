@@ -87,6 +87,52 @@ final class ClientGatewayTest extends TestCase
         $this->assertTrue($this->gatewayFor((array) $capabilities)->supportsSamplingTools());
     }
 
+    public function testSupportsSamplingContextReflectsTheSubCapability(): void
+    {
+        $this->assertTrue($this->gatewayFor(['sampling' => ['context' => []]])->supportsSamplingContext());
+        $this->assertFalse($this->gatewayFor(['sampling' => []])->supportsSamplingContext());
+        $this->assertFalse($this->gatewayFor([])->supportsSamplingContext());
+    }
+
+    public function testProbesReadTheJsonRoundTrippedShape(): void
+    {
+        // What a persisted session hands back: the serialized capabilities
+        // after a trip through JSON, all objects decayed to arrays.
+        $capabilities = new ClientCapabilities(
+            roots: true,
+            sampling: true,
+            elicitation: true,
+            extensions: [McpApps::EXTENSION_ID => (new McpApps())->getCapabilities()],
+            samplingTools: true,
+            elicitationUrl: true,
+        );
+        $persisted = json_decode(json_encode($capabilities, \JSON_THROW_ON_ERROR), true, 512, \JSON_THROW_ON_ERROR);
+
+        $gateway = $this->gatewayFor($persisted);
+
+        $this->assertTrue($gateway->supportsRoots());
+        $this->assertTrue($gateway->supportsSampling());
+        $this->assertTrue($gateway->supportsElicitation());
+        $this->assertTrue($gateway->supportsSamplingTools());
+        $this->assertFalse($gateway->supportsSamplingContext());
+        $this->assertTrue($gateway->supportsElicitationUrl());
+        $this->assertTrue($gateway->supportsExtension(McpApps::EXTENSION_ID));
+    }
+
+    public function testProbesRefuseEverythingWhenNoCapabilitiesWereDeclared(): void
+    {
+        // A client declaring nothing is stored as the serialized empty object.
+        $gateway = $this->gatewayFor((new ClientCapabilities())->jsonSerialize());
+
+        $this->assertFalse($gateway->supportsRoots());
+        $this->assertFalse($gateway->supportsSampling());
+        $this->assertFalse($gateway->supportsElicitation());
+        $this->assertFalse($gateway->supportsSamplingTools());
+        $this->assertFalse($gateway->supportsSamplingContext());
+        $this->assertFalse($gateway->supportsElicitationUrl());
+        $this->assertFalse($gateway->supportsExtension(McpApps::EXTENSION_ID));
+    }
+
     public function testSupportsExtensionReflectsTheNegotiatedExtensions(): void
     {
         $this->assertTrue($this->gatewayFor(['extensions' => [McpApps::EXTENSION_ID => ['mimeTypes' => [McpApps::MIME_TYPE]]]])->supportsExtension(McpApps::EXTENSION_ID));
@@ -189,9 +235,9 @@ final class ClientGatewayTest extends TestCase
     }
 
     /**
-     * @param array<string, mixed> $capabilities the client capabilities the session reports
+     * @param array<string, mixed>|object $capabilities the client capabilities the session reports
      */
-    private function gatewayFor(array $capabilities): ClientGateway
+    private function gatewayFor(array|object $capabilities): ClientGateway
     {
         $session = $this->createMock(SessionInterface::class);
         $session->method('getId')->willReturn(Uuid::v4());
