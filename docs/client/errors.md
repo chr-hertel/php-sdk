@@ -27,6 +27,21 @@ try {
 }
 ```
 
+## AuthorizationException
+
+Thrown when the server requires credentials the client could not obtain — see
+[Authorization](authorization.md):
+
+```php
+use Mcp\Exception\AuthorizationException;
+
+try {
+    $client->connect($transport);
+} catch (AuthorizationException $e) {
+    echo "Could not authorize: {$e->getMessage()}\n";
+}
+```
+
 ## RequestException
 
 ```php
