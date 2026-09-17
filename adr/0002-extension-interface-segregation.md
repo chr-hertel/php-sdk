@@ -141,23 +141,18 @@ interface ResultProvidingExtensionInterface extends ExtensionInterface
 
 /**
  * Forced by: Skills (`directoryRead` must match what is served; the extension requires the
- * `resources` capability), Auth (the settings announce a transport the build may not have).
+ * `resources` capability), Auth (the settings announce a transport the build may not have),
+ * Apps (a tool's `_meta.ui.resourceUri` must resolve to a registered `ui://` resource).
  * Replaces a bespoke requires()/dependency DSL with one throw at build time.
+ *
+ * Caveat: `$context->registry` is null when element loading is deferred — reading it would
+ * force the load that `detectCapabilities()` is careful to avoid. A check that needs the
+ * registry is therefore best-effort, and must skip rather than throw when it is absent.
  */
 interface SelfCheckingExtensionInterface extends ExtensionInterface
 {
     /** @throws LogicException when the build cannot honour what getSettings() announces */
     public function check(ExtensionContext $context): void;
-}
-
-/**
- * Forced by: Apps, Skills. An extension has two namespaces and today's interface models one:
- * `io.modelcontextprotocol/skills` is the capability key, `io.modelcontextprotocol.skills/`
- * is the `_meta` prefix, and Apps uses a bare `ui`. Make the second one explicit.
- */
-interface MetaProvidingExtensionInterface extends ExtensionInterface
-{
-    public function getMetaPrefix(): string;
 }
 ```
 
@@ -225,15 +220,47 @@ documented as a low-level escape hatch. An extension should not get it silently.
 
 ## What each extension implements
 
-| | base | Message | Handler | Element | Argument | Result | SelfCheck | Meta |
-|---|---|---|---|---|---|---|---|---|
-| Auth (both) | ● | | | | | | ● | |
-| Apps | ● | | | | | | | ● |
-| Tasks | ● | ● | ● | | ● | ● | ● | |
-| Skills | ● | ● | ● | ● | | | ● | ● |
+| | base | Message | Handler | Element | Argument | Result | SelfCheck |
+|---|---|---|---|---|---|---|---|
+| Auth (both) | ● | | | | | | ● |
+| Apps | ● | | | | | | ● |
+| Tasks | ● | ● | ● | | ● | ● | ● |
+| Skills | ● | ● | ● | ● | | | ● |
 
 Every cell that is empty today costs a core patch or a hand-wired workaround. Every cell that is
 filled is forced by an extension that has been accepted, not by speculation.
+
+## Considered and dropped
+
+**A `_meta` namespace interface** (`getMetaPrefix(): string`). The review that produced this ADR
+listed "an extension has two namespaces and the interface models one" as a gap:
+`io.modelcontextprotocol/skills` is the capability key while `io.modelcontextprotocol.skills/`
+is the `_meta` prefix, and Apps uses a bare `ui`. That observation is correct; the interface
+that follows from it is not.
+
+`_meta` is an open, untyped bag. It is set at registration (`addTool(..., meta: [...])`, or the
+`meta:` argument of the attributes), carried verbatim on `Schema\Tool::$meta` and friends,
+serialised as-is, and read in whatever handler cares. It is deliberately forward-compatible: a
+server must be able to pass through `_meta` for extensions this SDK has never heard of. So there
+is no point in the pipeline where core could consume a prefix string:
+
+- It cannot *validate* keys against enabled extensions without breaking that pass-through.
+- It cannot *namespace* keys on the author's behalf — Apps' key is `ui`, not a prefix at all.
+- It cannot *deconflict*, because reverse-DNS prefixes already cannot collide.
+
+A method no consumer calls is a class constant with an interface wrapped around it. `McpApps`
+already has the better version: `EXTENSION_ID`, `MIME_TYPE`, `URI_SCHEME` constants plus typed
+DTOs (`UiToolMeta`, `UiResourceContentMeta`) that produce the payload. That is class design, and
+it needs no contract.
+
+What was real underneath the observation splits in two, and neither is an axis:
+
+1. **Cross-reference validation** — that a tool's `_meta.ui.resourceUri` actually resolves to a
+   registered `ui://` resource. That is build-time validation with the registry in hand, so it
+   belongs to `SelfCheckingExtensionInterface` (above), where Apps now claims its one cell.
+2. **A docblock correction.** `ExtensionIdentifier`'s class docblock calls the identifier "a
+   `_meta` key with a mandatory vendor prefix", conflating the capability key with the `_meta`
+   prefix. That is a wrong sentence to fix, not an interface to add.
 
 ## What this deliberately does not add
 
