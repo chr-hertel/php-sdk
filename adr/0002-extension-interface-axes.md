@@ -438,8 +438,8 @@ both directions.** Note this says nothing about stdio: hosting interceptors
 (`interceptors/list`, `interceptor/invoke`) needs no middleware at all on any transport — it is
 new methods and a new primitive kind, which the interface above already covers.
 
-A protocol middleware layer is therefore worth its own ADR, and is valuable independently of
-extensions: short-circuiting and wrapping are things users want directly, stdio would reach
+A protocol middleware layer is therefore worth its own ADR — [0003](0003-protocol-middleware.md)
+drafts it — and is valuable independently of extensions: short-circuiting and wrapping are things users want directly, stdio would reach
 parity with HTTP, and `OAuthRequestMetaMiddleware` could stop rewriting JSON. If that layer
 lands, the extension axis is one method and one default — exactly the pattern above. Until then
 the governance rule applies and says wait: **no accepted extension forces it.** Auth is served

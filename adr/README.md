@@ -9,3 +9,4 @@ a pull request that conflicts with an accepted decision.
 
 - [0001 — The MCP server is an OAuth Resource Server, not an Authorization Server](0001-oauth-authorization-server-out-of-scope.md)
 - [0002 — Widen `ExtensionInterface` to the axes extensions actually use](0002-extension-interface-axes.md) (Proposed)
+- [0003 — A protocol middleware layer, in two phases rather than a wrapped call](0003-protocol-middleware.md) (Proposed)
