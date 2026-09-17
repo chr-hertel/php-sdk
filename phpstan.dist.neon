@@ -9,6 +9,8 @@ parameters:
         - tests/
     excludePaths:
         - examples/cli/vendor/* (?)
+        # Standalone example with its own composer.json and vendor/ (amphp), not installed here.
+        - examples/http2-stdio/
         - tests/Unit/Capability/Discovery/Fixtures/
         - tests/Unit/Capability/Discovery/SchemaGeneratorFixture.php
     treatPhpDocTypesAsCertain: false
