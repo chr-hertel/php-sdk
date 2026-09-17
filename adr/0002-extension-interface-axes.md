@@ -1,4 +1,4 @@
-# 0002 — Segregate `ExtensionInterface` along the axes extensions actually use
+# 0002 — Widen `ExtensionInterface` to the axes extensions actually use
 
 - Status: **Proposed** (sketch for discussion — nothing implemented)
 - Date: 2026-09-17
@@ -57,12 +57,15 @@ So these contracts are ours to invent — and ours to keep small.
 
 ## Sketch
 
-A **thin base** that every extension can honestly implement, plus **opt-in interfaces, one per
-integration axis**, each introduced because an accepted extension forces it. The
-`ArgumentProvidingExtensionInterface` split already on `feat-ext-tasks` is this pattern; the
-sketch generalises it rather than inventing it.
+**One interface** that catalogues what an extension can hook into, with **`AbstractExtension`
+carrying a default for every axis but identity and settings**. Each axis is on the interface
+because an accepted extension forces it; each default is there so no extension pays for an axis
+it does not use.
 
-### Base
+`ArgumentProvidingExtensionInterface` on `feat-ext-tasks` is the first of these axes, discovered
+under pressure and split out because there was nowhere else to put it. This folds it back in.
+
+### One interface, with `AbstractExtension` carrying the optionality
 
 ```php
 namespace Mcp\Schema\Extension;
@@ -87,74 +90,155 @@ interface ExtensionInterface
      * @return array<string, mixed>
      */
     public function getSettings(Peer $peer): array;
-}
-```
 
-That is the whole of an auth extension. `AbstractExtension` disappears — there is nothing left
-for it to stub out.
-
-### The axes
-
-Each is `extends ExtensionInterface`, each is checked with `instanceof` where it is consumed.
-
-```php
-/** Forced by: Tasks, Skills. Registers message classes with the MessageFactory. */
-interface MessageProvidingExtensionInterface extends ExtensionInterface
-{
-    /** @return list<class-string<Request>|class-string<Notification>> */
+    /**
+     * Message classes this extension defines, registered with the MessageFactory.
+     *
+     * Forced by: Tasks, Skills.
+     *
+     * @return list<class-string<Request>|class-string<Notification>>
+     */
     public function getMessages(): array;
-}
 
-/** Forced by: Tasks, Skills. Built at build() time, with the SDK's services in hand. */
-interface HandlerProvidingExtensionInterface extends MessageProvidingExtensionInterface
-{
-    /** @return iterable<RequestHandlerInterface<ResultInterface>|NotificationHandlerInterface> */
+    /**
+     * The handlers serving those methods, built with the SDK's services in hand.
+     *
+     * Forced by: Tasks, Skills. Today's equivalent is drained inside
+     * enableExtension(), so a handler can never see the logger, the
+     * Configuration (and its paginationLimit), the registry or the container.
+     *
+     * @return iterable<RequestHandlerInterface<ResultInterface>|NotificationHandlerInterface>
+     */
     public function getHandlers(ExtensionContext $context): iterable;
-}
 
-/** Forced by: Skills. Contributes tools/resources/templates/prompts and server instructions. */
-interface ElementProvidingExtensionInterface extends ExtensionInterface
-{
+    /**
+     * Tools, resources, templates and prompts this extension contributes.
+     *
+     * Forced by: Skills, whose skills are served as resources. Apps stops
+     * needing a documentation page that tells users to hand-wire them.
+     */
     public function registerElements(ElementRegistrar $elements): void;
 
-    /** Appended to the server's `instructions`, e.g. the Skills pointer. */
+    /**
+     * Appended to the server's `instructions` — e.g. the Skills pointer.
+     *
+     * Forced by: Skills.
+     */
     public function getInstructions(): ?string;
-}
 
-/** Forced by: Tasks. Unchanged in spirit from feat-ext-tasks; now receives the context. */
-interface ArgumentProvidingExtensionInterface extends ExtensionInterface
-{
-    /** @return array<class-string, callable(SessionInterface, Request): object> */
+    /**
+     * Builders for types this extension injects into tool, prompt and resource
+     * handlers, the way the SDK injects a RequestContext.
+     *
+     * Forced by: Tasks (TaskContext). Same shape as
+     * ArgumentProvidingExtensionInterface on feat-ext-tasks, folded in here.
+     *
+     * @return array<class-string, callable(SessionInterface, Request): object>
+     */
     public function getArgumentProviders(ExtensionContext $context): array;
-}
 
-/**
- * Forced by: Tasks. Declares the result shapes a user handler may return instead of the
- * method's own result, so core handlers pass them through by declaration rather than by a
- * hardcoded `instanceof CallToolResult` check.
- */
-interface ResultProvidingExtensionInterface extends ExtensionInterface
-{
-    /** @return list<class-string<ResultInterface>> */
+    /**
+     * Result shapes a user handler may return instead of the method's own result.
+     *
+     * Forced by: Tasks. Lets core handlers pass a foreign result through by
+     * declaration rather than by a hardcoded `instanceof CallToolResult` check.
+     *
+     * @return list<class-string<ResultInterface>>
+     */
     public function getResultTypes(): array;
-}
 
-/**
- * Forced by: Skills (`directoryRead` must match what is served; the extension requires the
- * `resources` capability), Auth (the settings announce a transport the build may not have),
- * Apps (a tool's `_meta.ui.resourceUri` must resolve to a registered `ui://` resource).
- * Replaces a bespoke requires()/dependency DSL with one throw at build time.
- *
- * Caveat: `$context->registry` is null when element loading is deferred — reading it would
- * force the load that `detectCapabilities()` is careful to avoid. A check that needs the
- * registry is therefore best-effort, and must skip rather than throw when it is absent.
- */
-interface SelfCheckingExtensionInterface extends ExtensionInterface
-{
-    /** @throws LogicException when the build cannot honour what getSettings() announces */
+    /**
+     * Assert at build time that the build can honour what getSettings() announces.
+     *
+     * Forced by: Skills (`directoryRead` must match what is served; the
+     * extension requires the `resources` capability), Auth (the settings
+     * announce a transport the build may not have), Apps (a tool's
+     * `_meta.ui.resourceUri` must resolve to a registered `ui://` resource).
+     * Replaces a bespoke requires()/dependency DSL with one throw.
+     *
+     * Caveat: `$context->registry` is null when element loading is deferred —
+     * reading it would force the load that detectCapabilities() is careful to
+     * avoid. A check that needs the registry is best-effort, and must skip
+     * rather than throw when it is absent.
+     *
+     * @throws LogicException when the announcement cannot be honoured
+     */
     public function check(ExtensionContext $context): void;
 }
 ```
+
+`AbstractExtension` is what makes the seven methods bearable — and it is the same pattern
+`BaseTransport` already uses in this SDK ("a skeletal implementation … to minimize the effort
+required to implement this interface", with empty `initialize()`/`close()` for the optional
+lifecycle hooks):
+
+```php
+/**
+ * Provides a skeletal implementation of ExtensionInterface to minimize the effort
+ * required to implement it: every axis but identity and settings defaults to
+ * "this extension is not that kind of extension".
+ */
+abstract class AbstractExtension implements ExtensionInterface
+{
+    public function getMessages(): array
+    {
+        return [];
+    }
+
+    public function getHandlers(ExtensionContext $context): iterable
+    {
+        return [];
+    }
+
+    public function registerElements(ElementRegistrar $elements): void
+    {
+    }
+
+    public function getInstructions(): ?string
+    {
+        return null;
+    }
+
+    public function getArgumentProviders(ExtensionContext $context): array
+    {
+        return [];
+    }
+
+    public function getResultTypes(): array
+    {
+        return [];
+    }
+
+    public function check(ExtensionContext $context): void
+    {
+    }
+}
+```
+
+An auth extension is then genuinely two methods:
+
+```php
+final class OAuthClientCredentials extends AbstractExtension
+{
+    public function getId(): ExtensionIdentifier
+    {
+        return new ExtensionIdentifier('io.modelcontextprotocol/oauth-client-credentials');
+    }
+
+    public function getSettings(Peer $peer): array
+    {
+        return [];
+    }
+
+    // …plus check(), the one axis it does use, if the transport must be verified.
+}
+```
+
+Note what this changes about `AbstractExtension` itself: not the class, but its justification.
+Its current docblock scopes it to "an extension that only announces a capability and adds no RPC
+methods of its own — the common case", which is a claim about extensions that the agenda has
+already falsified. Reframed as the default carrier for every optional axis, it stops being a
+shortcut for trivial extensions and becomes the supported base for all of them.
 
 ### The context
 
@@ -218,19 +302,55 @@ The same interfaces, honoured symmetrically:
 method stays possible, deliberately and loudly, through `addRequestHandler()` — which is already
 documented as a low-level escape hatch. An extension should not get it silently.
 
-## What each extension implements
+## What each extension overrides
 
-| | base | Message | Handler | Element | Argument | Result | SelfCheck |
+Everything not listed is inherited from `AbstractExtension`.
+
+| | getMessages | getHandlers | registerElements | getInstructions | getArgumentProviders | getResultTypes | check |
 |---|---|---|---|---|---|---|---|
-| Auth (both) | ● | | | | | | ● |
-| Apps | ● | | | | | | ● |
-| Tasks | ● | ● | ● | | ● | ● | ● |
+| Auth (both) | | | | | | | ● |
+| Apps | | | | | | | ● |
+| Tasks | ● | ● | | | ● | ● | ● |
 | Skills | ● | ● | ● | ● | | | ● |
 
-Every cell that is empty today costs a core patch or a hand-wired workaround. Every cell that is
-filled is forced by an extension that has been accepted, not by speculation.
+Every filled cell is forced by an extension that has been accepted, not by speculation, and
+each one costs a core patch or a hand-wired workaround today. Every empty cell is a method the
+implementer never writes.
 
 ## Considered and dropped
+
+**Interface segregation — one opt-in interface per axis**, consumed by `instanceof` in the
+builder. This was the first shape of this sketch, on the reasoning that a seven-method interface
+makes an auth extension answer five questions it does not have, returning `[]` to say "I am not
+that kind of extension".
+
+That objection evaporates once `AbstractExtension` carries the defaults: auth writes two methods
+either way, and writes them without the implementer first having to learn which of seven
+interfaces exist. The rest of the comparison then goes the other way too:
+
+- **PHP has no default interface methods.** Segregation is the workaround for that gap; a
+  skeletal abstract base is the direct expression of it, and the one this SDK already uses —
+  `BaseTransport` is exactly this, down to the empty `initialize()`/`close()`.
+- **One interface is the catalogue.** Seven interfaces are only discoverable if you already know
+  to look for them; `ExtensionInterface` read top to bottom tells an author everything an
+  extension can do.
+- **No `instanceof` ladder.** `enableExtension()` and `build()` call the methods straight
+  through instead of branching on seven type checks, each of which is a place to forget one.
+- **An empty return is never ambiguous here.** No axis has a meaningful difference between
+  "absent" and "empty": no messages, no handlers, no elements, null instructions, no argument
+  providers, no result types, a no-op check. Where that distinction does not exist, `instanceof`
+  buys nothing over a default.
+
+Two costs come with it, and are accepted:
+
+1. **The abstract class becomes the real API.** Anyone writing `implements ExtensionInterface`
+   without extending `AbstractExtension` — a class that already has a parent, say — implements
+   all seven. That is the standard trade of this pattern, and `BaseTransport` already lives with
+   it.
+2. **The interface is now cheap to grow.** Adding an axis costs one method and one default, so
+   nothing pushes back on adding them. The discipline that segregation enforced structurally has
+   to become a rule instead: *an axis is added only when an accepted extension forces it, and it
+   must have a sane default.* The "does not add" list below is that rule's current output.
 
 **A `_meta` namespace interface** (`getMetaPrefix(): string`). The review that produced this ADR
 listed "an extension has two namespaces and the interface models one" as a gap:
@@ -280,10 +400,12 @@ What was real underneath the observation splits in two, and neither is an axis:
 ## Migration
 
 The SDK is pre-1.0 (see `docs/deprecation-policy.md`), so this is a `[BC Break]` changelog entry
-rather than a deprecation cycle. Affected: `McpApps` (drop `AbstractExtension`, make settings
-side-aware), the two test fixtures, and `feat-ext-tasks`, which is the natural first consumer —
-it would *shrink*, losing its core patches to `CallToolHandler`, `ReferenceHandler`,
-`SchemaGenerator` and `Protocol`.
+rather than a deprecation cycle. `AbstractExtension` survives with a wider job and four more
+defaults, so anything already extending it keeps working past the `getSettings(Peer)` rename.
+Affected: `McpApps` (side-aware settings, plus a `check()` for the `resourceUri` cross-check),
+the two test fixtures, and `feat-ext-tasks`, which is the natural first consumer — it would
+*shrink*, folding `ArgumentProvidingExtensionInterface` back into the base and losing its core
+patches to `CallToolHandler`, `ReferenceHandler`, `SchemaGenerator` and `Protocol`.
 
 ## Open questions
 
@@ -297,17 +419,24 @@ it would *shrink*, losing its core patches to `CallToolHandler`, `ReferenceHandl
 3. **`getSettings()` vs `getCapabilities()`.** The spec calls the payload a *settings object*;
    renaming aligns the vocabulary and makes the side-aware signature a clean break point. Costs
    a rename in every implementation.
-4. **Does `ElementProviding…` register through the builder or through a loader?** A narrow
-   `ElementRegistrar` façade keeps extensions off the full `Builder` API, but it is a second
-   registration path to keep in sync.
-5. **Is `resources/directory/read` (Skills) an extension method or a core one?** If extensions
+4. **Does `registerElements()` go through the builder or a loader?** A narrow `ElementRegistrar`
+   façade keeps extensions off the full `Builder` API, but it is a second registration path to
+   keep in sync.
+5. **Do the server-only axes belong on an interface clients implement?** `registerElements()`,
+   `getArgumentProviders()` and `getResultTypes()` are server concepts, and a client-only
+   extension now inherits all three. Passing `Peer` makes it coherent, but it does put
+   server-namespace types on the interface every extension implements — which is question 2
+   again, from the other side. This is the one thing segregation bought that defaults do not.
+6. **Is `resources/directory/read` (Skills) an extension method or a core one?** If extensions
    may serve methods in core namespaces, the namespace guard above needs an explicit opt-in verb
    rather than a flat throw.
 
 ## Consequences
 
-- An auth extension becomes two methods instead of four, two of them returning `[]` to say
-  "I am not that kind of extension".
+- An auth extension is two methods and a `check()`; the five axes it has no use for are
+  inherited, not restated.
+- `AbstractExtension` stops being a shortcut for trivial extensions and becomes the supported
+  base for all of them — the same role `BaseTransport` plays for transports.
 - Tasks stops being a special case in core: no `instanceof CallToolResult` carve-out, no named
   exception catch, no `injectedTypes` plumbed by hand.
 - Skills becomes implementable as a first-class `->enableExtension(new SkillsExtension($dir))`
