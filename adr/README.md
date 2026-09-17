@@ -8,3 +8,4 @@ a pull request that conflicts with an accepted decision.
 ## Records
 
 - [0001 — The MCP server is an OAuth Resource Server, not an Authorization Server](0001-oauth-authorization-server-out-of-scope.md)
+- [0002 — Segregate `ExtensionInterface` along the axes extensions actually use](0002-extension-interface-segregation.md) (Proposed)
