@@ -428,6 +428,16 @@ Its interceptors are **remote interceptor servers**, discovered and invoked over
 gateway — a distributed governance chain, not an in-process pipeline. It neither supplies nor
 implies a local middleware layer.
 
+One constraint for that ADR, found by asking what SEP-2624 would need if this SDK ever played
+*invoker* (the SEP says SDKs are expected to ship the chain orchestration): its event list
+includes `sampling/createMessage`, `elicitation/create` and `roots/list`. Those are **outbound**
+server→client requests, issued through `ClientGateway`, not inbound dispatch. A layer built only
+as a decorator around inbound `Request → Response` handling would cover `tools/call` and
+`resources/read` and structurally miss a third of the SEP's own events. **The layer has to wrap
+both directions.** Note this says nothing about stdio: hosting interceptors
+(`interceptors/list`, `interceptor/invoke`) needs no middleware at all on any transport — it is
+new methods and a new primitive kind, which the interface above already covers.
+
 A protocol middleware layer is therefore worth its own ADR, and is valuable independently of
 extensions: short-circuiting and wrapping are things users want directly, stdio would reach
 parity with HTTP, and `OAuthRequestMetaMiddleware` could stop rewriting JSON. If that layer
