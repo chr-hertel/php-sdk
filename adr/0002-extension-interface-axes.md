@@ -384,9 +384,9 @@ What was real underneath the observation splits in two, and neither is an axis:
 
 ## What this deliberately does not add
 
-- **No request/response middleware or interceptor chain.** Tasks needs result *pass-through*,
-  which `ResultProviding…` gives declaratively; nothing on the agenda needs to rewrite another
-  extension's traffic. `experimental-ext-interceptors` may change that; wait for it.
+- **No middleware axis.** Not because middleware is unwanted — see the section below, it is the
+  most defensible of the deferred items — but because the layer an extension would contribute to
+  does not exist yet, and the one that does cannot be reached from `enableExtension()`.
 - **No dependency DSL** between extensions or on protocol revisions. `SelfChecking…` covers the
   one real case (Skills → `resources`) with a throw, not a graph.
 - **No extension versioning API.** SEP-2133 says: flags inside the settings object, and a new
@@ -396,6 +396,44 @@ What was real underneath the observation splits in two, and neither is an axis:
   is true. Letting an extension reach into the transport is a much larger door than auth needs.
 - **No per-session enablement.** ext-apps suggests registering tool variants per client
   capability; the registry is fixed at `build()`. Worth a separate ADR, not this one.
+
+### On middleware specifically
+
+The SDK has two-and-a-half middleware stories and the gap between them is where auth is
+currently living:
+
+| Layer | State | Owned by |
+|---|---|---|
+| HTTP | PSR-15, eight middlewares, `defaultMiddleware()` / `[]` to disable | the **transport constructor** |
+| Protocol (decoded `Request` → `Response`) | absent; PSR-14 events *mutate* (`RequestEvent::setRequest()`, `ErrorEvent`'s replacement) but cannot short-circuit or wrap a call | — |
+| stdio | nothing | — |
+
+`OAuthRequestMetaMiddleware` is the proof of the missing middle. To get HTTP-layer identity into
+`RequestContext`, it decodes the JSON-RPC body, injects `_meta.oauth` into each message
+(batch-aware), and re-encodes it. A protocol-level concern, implemented by rewriting bytes one
+layer down, because there is no layer in between to put it in.
+
+So a `getMiddleware()` axis would be wrong three times over:
+
+1. **The builder cannot install it.** Middleware goes to the transport constructor; extensions go
+   to the builder, which never sees the transport. Honouring the axis means inverting that wiring
+   — a larger change than the whole of this ADR.
+2. **PSR-15 is HTTP-only.** An extension declaring middleware would be silently inert over stdio.
+   An axis whose contract depends on the transport is worse than no axis.
+3. **It would point at a layer that does not exist.** What auth wants is protocol middleware, and
+   adding the axis before the layer just relocates the gap.
+
+And SEP-2624 is *not* the thing to wait for, contrary to what an earlier draft of this ADR said.
+Its interceptors are **remote interceptor servers**, discovered and invoked over JSON-RPC by a
+gateway — a distributed governance chain, not an in-process pipeline. It neither supplies nor
+implies a local middleware layer.
+
+A protocol middleware layer is therefore worth its own ADR, and is valuable independently of
+extensions: short-circuiting and wrapping are things users want directly, stdio would reach
+parity with HTTP, and `OAuthRequestMetaMiddleware` could stop rewriting JSON. If that layer
+lands, the extension axis is one method and one default — exactly the pattern above. Until then
+the governance rule applies and says wait: **no accepted extension forces it.** Auth is served
+by PSR-15 today, and interceptors are both experimental and remote.
 
 ## Migration
 
