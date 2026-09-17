@@ -95,3 +95,26 @@ php examples/client/stateless_lifecycle_client.php
 ```
 
 See [Clients on the modern revision](client/connecting.md) for the API it uses.
+
+## Transport experiments
+
+Not every example builds on the SDK. [`http2-stdio`](https://github.com/modelcontextprotocol/php-sdk/tree/main/examples/http2-stdio)
+speaks plain HTTP/2 (h2c, prior knowledge) over the STDIN/STDOUT pipes of a child process, using
+the Amp HTTP client and server: headers, status codes, `text/event-stream` bodies and stream
+multiplexing, with no port and no TLS anywhere. It exists to show that HTTP semantics — session
+headers, content negotiation, concurrent streams — do not require a socket, and it is neither part
+of the SDK nor a transport the MCP specification defines.
+
+It brings its own dependencies, so it installs separately from the repository root:
+
+```bash
+cd examples/http2-stdio
+composer install
+php client.php
+
+# name every HTTP/2 frame as it crosses the pipe
+H2_TRACE=1 php client.php
+```
+
+Its [README](https://github.com/modelcontextprotocol/php-sdk/tree/main/examples/http2-stdio) walks
+through the wiring — the `Socket` adapter over the pipes is the only piece that is not stock Amp.
