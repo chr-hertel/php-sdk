@@ -8,6 +8,13 @@ All notable changes to `mcp/sdk` will be documented in this file.
 * [BC Break] Remove the `providerClass` argument of `#[CompletionProvider]`. Use `provider:`, which takes the same class-string and is now the first positional argument.
 * Add `HttpTransport::getSessionId()` to read the server-minted `Mcp-Session-Id`: a request-scoped caller can persist it and pass it back through the constructor's `$headers` on a later transport. Always `null` on `2026-07-28`, which removed protocol-level sessions.
 * Fix OIDC discovery rejecting issuers with a trailing slash (e.g. Authentik, Auth0).
+* [BC Break] Narrow authorization to the resource server role (ADR 0002): remove `OAuthProxyMiddleware`, `ClientRegistrationMiddleware`, `ClientRegistrarInterface` and `ClientRegistrationException`.
+* [BC Break] Replace `OAuthRequestMetaMiddleware` with `RequestContext::getAccessToken()`, returning the validated `Server\Authorization\AccessToken`; `AuthorizationResult::allow()` takes an `AccessToken` instead of request attributes.
+* [BC Break] Make `JwtTokenValidator` final with a single issuer and a `$keys` set (e.g. `CachedKeySet`); `JwtTokenValidator::fromIssuer()` discovers and caches keys in a PSR-6 pool, refetching on unknown key ids. The `alg` allowlist is enforced, `$tokenType` and `$leeway` are added, `requireScopes()` is removed in favour of `ScopePolicy`.
+* [BC Break] Remove `JwksProvider`, `JwksProviderInterface`, `OidcDiscoveryInterface` and the OIDC metadata policies; `OidcDiscovery` is internal.
+* [BC Break] `ProtectedResourceMetadata` requires `$resource`, serves at the path derived from it (RFC 9728 §3.1) and requires https except for loopback hosts; drops localized, policy, ToS, extra fields and `$metadataPaths`.
+* [BC Break] Add `ScopePolicy` as third argument of `AuthorizationMiddleware`, answering `403 insufficient_scope` per method and tool, with scope hierarchies; the `resource_metadata` challenge URL comes from the configured resource instead of the `Host` header.
+* Expose `WWW-Authenticate` in the default `CorsMiddleware`.
 
 0.8.0
 -----
