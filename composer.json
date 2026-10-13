@@ -50,6 +50,7 @@
     "phar-io/composer-distributor": "^1.0.2",
     "php-cs-fixer/shim": "^3.91",
     "phpdocumentor/shim": "^3",
+    "phpstan/phpdoc-parser": "^2.0",
     "phpstan/phpstan": "^2.1",
     "phpunit/phpunit": "^10.5",
     "psr/cache": "^1.0 || ^2.0 || ^3.0",
@@ -58,7 +59,10 @@
     "symfony/console": "^5.4 || ^6.4 || ^7.3 || ^8.0",
     "symfony/finder": "^5.4 || ^6.4 || ^7.3 || ^8.0",
     "symfony/http-client": "^5.4 || ^6.4 || ^7.3 || ^8.0",
-    "symfony/process": "^5.4 || ^6.4 || ^7.3 || ^8.0"
+    "symfony/json-schema": "8.2.x-dev",
+    "symfony/process": "^5.4 || ^6.4 || ^7.3 || ^8.0",
+    "symfony/serializer": "^8.2@dev",
+    "symfony/validator": "^8.2@dev"
   },
   "conflict": {
     "phpstan/phpstan": "2.3.0"
@@ -99,5 +103,18 @@
       "phpdocumentor/shim": true
     },
     "sort-packages": true
-  }
+  },
+  "repositories": [{
+    "name": "sf-json-schema",
+    "type": "path",
+    "url": "../json-schema/src/Symfony/Component/JsonSchema",
+    "options": {
+      "symlink": true,
+      "versions": {
+        "symfony/json-schema": "8.2.x-dev"
+      }
+    }
+  }],
+  "minimum-stability": "dev",
+  "prefer-stable": true
 }
