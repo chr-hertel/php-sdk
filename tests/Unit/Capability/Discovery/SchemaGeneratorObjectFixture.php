@@ -16,13 +16,13 @@ use Mcp\Server\RequestContext;
 use Symfony\Component\JsonSchema\Attribute\JsonSchemaConstraint;
 use Symfony\Component\Validator\Constraints as Assert;
 
-enum SymfonyJsonSchemaUnit: string
+enum FixtureUnit: string
 {
     case Celsius = 'c';
     case Fahrenheit = 'f';
 }
 
-final class SymfonyJsonSchemaAddress
+final class FixtureAddress
 {
     public function __construct(
         public string $street,
@@ -32,7 +32,7 @@ final class SymfonyJsonSchemaAddress
     }
 }
 
-final class SymfonyJsonSchemaUser
+final class FixtureUser
 {
     /**
      * @param list<string> $tags
@@ -42,22 +42,22 @@ final class SymfonyJsonSchemaUser
         public string $email,
         #[JsonSchemaConstraint(minimum: 18)]
         public int $age,
-        public ?SymfonyJsonSchemaAddress $address = null,
+        public ?FixtureAddress $address = null,
         public array $tags = [],
         public ?\DateTimeImmutable $birthday = null,
     ) {
     }
 }
 
-final class SymfonyJsonSchemaCategory
+final class FixtureCategory
 {
     public string $name;
 
-    /** @var list<SymfonyJsonSchemaCategory> */
+    /** @var list<FixtureCategory> */
     public array $children = [];
 }
 
-final class SymfonyJsonSchemaFixture
+final class SchemaGeneratorObjectFixture
 {
     /**
      * @param string                            $city    the city to look up
@@ -65,18 +65,18 @@ final class SymfonyJsonSchemaFixture
      * @param array{lat: float, label?: string} $point
      * @param array<string, int>                $weights
      */
-    public function scalars(string $city, array $fields, array $point, array $weights, int $days = 3, SymfonyJsonSchemaUnit $unit = SymfonyJsonSchemaUnit::Celsius): void
+    public function scalars(string $city, array $fields, array $point, array $weights, int $days = 3, FixtureUnit $unit = FixtureUnit::Celsius): void
     {
     }
 
     /**
-     * @param SymfonyJsonSchemaUser $user the user to create
+     * @param FixtureUser $user the user to create
      */
-    public function dto(SymfonyJsonSchemaUser $user, RequestContext $context): void
+    public function dto(FixtureUser $user, RequestContext $context): void
     {
     }
 
-    public function tree(SymfonyJsonSchemaCategory $root): void
+    public function tree(FixtureCategory $root): void
     {
     }
 
@@ -88,15 +88,15 @@ final class SymfonyJsonSchemaFixture
     {
     }
 
-    public function returnsDto(): SymfonyJsonSchemaUser
+    public function returnsDto(): FixtureUser
     {
-        return new SymfonyJsonSchemaUser('a@b.c', 18);
+        return new FixtureUser('a@b.c', 18);
     }
 
     #[McpTool(outputSchema: ['type' => 'object', 'properties' => ['explicit' => ['type' => 'boolean']]])]
-    public function explicitOutput(): SymfonyJsonSchemaUser
+    public function explicitOutput(): FixtureUser
     {
-        return new SymfonyJsonSchemaUser('a@b.c', 18);
+        return new FixtureUser('a@b.c', 18);
     }
 
     public function returnsArray(): array

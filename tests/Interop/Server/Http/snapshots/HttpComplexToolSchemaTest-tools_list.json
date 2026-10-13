@@ -26,8 +26,8 @@
           },
           "time": {
             "type": [
-              "null",
-              "string"
+              "string",
+              "null"
             ],
             "description": "the time of the event (HH:MM), optional",
             "default": null

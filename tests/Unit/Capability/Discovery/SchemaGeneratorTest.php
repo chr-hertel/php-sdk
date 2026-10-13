@@ -14,6 +14,7 @@ namespace Mcp\Tests\Unit\Capability\Discovery;
 use Mcp\Capability\Discovery\DocBlockParser;
 use Mcp\Capability\Discovery\SchemaGenerator;
 use Mcp\Exception\InvalidArgumentException;
+use Mcp\Schema\Tool;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
@@ -45,7 +46,7 @@ final class SchemaGeneratorTest extends TestCase
         $this->assertEquals(['type' => 'integer'], $schema['properties']['age']);
         $this->assertEquals(['type' => 'boolean'], $schema['properties']['active']);
         $this->assertEquals(['type' => 'array', 'items' => new \stdClass()], $schema['properties']['tags']);
-        $this->assertEquals(['type' => ['null', 'object'], 'default' => null], $schema['properties']['config']);
+        $this->assertEquals(['anyOf' => [['type' => 'object'], ['type' => 'null']], 'default' => null], $schema['properties']['config']);
         $this->assertEqualsCanonicalizing(['name', 'age', 'active', 'tags'], $schema['required']);
     }
 
@@ -274,7 +275,7 @@ final class SchemaGeneratorTest extends TestCase
         $this->assertSame('{}', json_encode($schema['properties']['genericArray']['items']));
         $this->assertEquals(['type' => 'array', 'description' => 'Array of strings', 'items' => ['type' => 'string']], $schema['properties']['stringArray']);
         $this->assertEquals(['type' => 'array', 'description' => 'Array of integers', 'items' => ['type' => 'integer']], $schema['properties']['intArray']);
-        $this->assertEquals(['type' => 'array', 'description' => 'Mixed array map', 'items' => new \stdClass()], $schema['properties']['mixedMap']);
+        $this->assertEquals(['type' => 'object', 'description' => 'Mixed array map', 'additionalProperties' => new \stdClass()], $schema['properties']['mixedMap']);
         $this->assertArrayHasKey('type', $schema['properties']['objectLikeArray']);
         $this->assertEquals('object', $schema['properties']['objectLikeArray']['type']);
         $this->assertArrayHasKey('properties', $schema['properties']['objectLikeArray']);
@@ -297,8 +298,8 @@ final class SchemaGeneratorTest extends TestCase
     {
         $method = new \ReflectionMethod(SchemaGeneratorFixture::class, 'nullableAndOptional');
         $schema = $this->schemaGenerator->generate($method);
-        $this->assertEquals(['type' => ['null', 'string'], 'description' => 'Nullable string'], $schema['properties']['nullableString']);
-        $this->assertEquals(['type' => ['null', 'integer'], 'description' => 'Nullable integer', 'default' => null], $schema['properties']['nullableInt']);
+        $this->assertEquals(['type' => ['string', 'null'], 'description' => 'Nullable string'], $schema['properties']['nullableString']);
+        $this->assertEquals(['type' => ['integer', 'null'], 'description' => 'Nullable integer', 'default' => null], $schema['properties']['nullableInt']);
         $this->assertEquals(['type' => 'string', 'default' => 'default'], $schema['properties']['optionalString']);
         $this->assertEquals(['type' => 'boolean', 'default' => true], $schema['properties']['optionalBool']);
         $this->assertEquals(['type' => 'array', 'default' => [], 'items' => new \stdClass()], $schema['properties']['optionalArray']);
@@ -309,8 +310,8 @@ final class SchemaGeneratorTest extends TestCase
     {
         $method = new \ReflectionMethod(SchemaGeneratorFixture::class, 'unionTypes');
         $schema = $this->schemaGenerator->generate($method);
-        $this->assertEquals(['type' => ['integer', 'string'], 'description' => 'String or integer'], $schema['properties']['stringOrInt']);
-        $this->assertEquals(['type' => ['null', 'boolean', 'string'], 'description' => 'Bool, string or null'], $schema['properties']['multiUnion']);
+        $this->assertEquals(['description' => 'String or integer', 'anyOf' => [['type' => 'integer'], ['type' => 'string']]], $schema['properties']['stringOrInt']);
+        $this->assertEquals(['description' => 'Bool, string or null', 'anyOf' => [['type' => 'boolean'], ['type' => 'string'], ['type' => 'null']]], $schema['properties']['multiUnion']);
         $this->assertEqualsCanonicalizing(['stringOrInt', 'multiUnion'], $schema['required']);
     }
 
@@ -480,5 +481,131 @@ final class SchemaGeneratorTest extends TestCase
             'type' => 'object',
             'additionalProperties' => true,
         ], $schema);
+    }
+
+    public function testDescribesParametersFromNativeTypesAndDocBlocks(): void
+    {
+        $this->assertSchema([
+            'type' => 'object',
+            'properties' => [
+                'city' => ['description' => 'the city to look up', 'type' => 'string'],
+                'fields' => ['description' => 'which fields to return', 'type' => 'array', 'items' => ['type' => 'string']],
+                'point' => [
+                    'type' => 'object',
+                    'properties' => ['label' => ['type' => 'string'], 'lat' => ['type' => 'number']], // sorted by TypeInfo
+                    'required' => ['lat'],
+                    'additionalProperties' => false,
+                ],
+                'weights' => ['type' => 'object', 'additionalProperties' => ['type' => 'integer']],
+                'days' => ['type' => 'integer', 'default' => 3],
+                'unit' => ['type' => 'string', 'enum' => ['c', 'f'], 'default' => 'c'],
+            ],
+            'required' => ['city', 'fields', 'point', 'weights'],
+        ], 'scalars');
+    }
+
+    public function testDescribesObjectParametersFromTheirProperties(): void
+    {
+        $this->assertSchema([
+            'type' => 'object',
+            'properties' => [
+                'user' => [
+                    'description' => 'the user to create',
+                    'type' => 'object',
+                    'properties' => [
+                        'email' => ['type' => 'string', 'format' => 'email'],
+                        'age' => ['type' => 'integer', 'minimum' => 18],
+                        'address' => ['anyOf' => [
+                            [
+                                'type' => 'object',
+                                'properties' => [
+                                    'street' => ['type' => 'string'],
+                                    'country' => ['type' => 'string', 'default' => 'DE', 'minLength' => 2, 'maxLength' => 2],
+                                ],
+                                'required' => ['street'],
+                            ],
+                            ['type' => 'null'],
+                        ]],
+                        'tags' => ['type' => 'array', 'items' => ['type' => 'string']],
+                        'birthday' => ['type' => ['string', 'null'], 'format' => 'date-time'],
+                    ],
+                    'required' => ['email', 'age'],
+                ],
+            ],
+            'required' => ['user'],
+        ], 'dto');
+    }
+
+    public function testHoistsDefinitionsOfCyclicClassesToTheRoot(): void
+    {
+        $category = [
+            'type' => 'object',
+            'properties' => [
+                'name' => ['type' => 'string'],
+                'children' => ['type' => 'array', 'items' => ['$ref' => '#/$defs/FixtureCategory']],
+            ],
+        ];
+
+        $this->assertSchema([
+            'type' => 'object',
+            'properties' => ['root' => $category],
+            'required' => ['root'],
+            '$defs' => ['FixtureCategory' => $category],
+        ], 'tree');
+    }
+
+    public function testDescribesVariadicParametersAsLists(): void
+    {
+        $this->assertSchema([
+            'type' => 'object',
+            'properties' => ['numbers' => ['type' => 'array', 'items' => ['type' => 'integer']]],
+        ], 'variadic');
+    }
+
+    public function testAcceptsAnythingForUntypedParameters(): void
+    {
+        $this->assertSchema([
+            'type' => 'object',
+            'properties' => ['anything' => new \stdClass()],
+            'required' => ['anything'],
+        ], 'untyped');
+    }
+
+    public function testOutputSchemaFromReturnTypeIsOptIn(): void
+    {
+        $method = new \ReflectionMethod(SchemaGeneratorObjectFixture::class, 'returnsDto');
+
+        $this->assertNull($this->schemaGenerator->generateOutputSchema($method));
+
+        $schema = (new SchemaGenerator(outputSchemaFromReturnType: true))->generateOutputSchema($method);
+        $this->assertNotNull($schema);
+        $this->assertSame('object', $schema['type']);
+        $this->assertSame(['email', 'age'], $schema['required']);
+    }
+
+    public function testExplicitOutputSchemaWins(): void
+    {
+        $generator = new SchemaGenerator(outputSchemaFromReturnType: true);
+
+        $this->assertSame(
+            ['type' => 'object', 'properties' => ['explicit' => ['type' => 'boolean']]],
+            $generator->generateOutputSchema(new \ReflectionMethod(SchemaGeneratorObjectFixture::class, 'explicitOutput')),
+        );
+        $this->assertNull($generator->generateOutputSchema(new \ReflectionMethod(SchemaGeneratorObjectFixture::class, 'returnsArray')));
+    }
+
+    /**
+     * @param array<string, mixed> $expected
+     */
+    private function assertSchema(array $expected, string $method): void
+    {
+        $schema = $this->schemaGenerator->generate(new \ReflectionMethod(SchemaGeneratorObjectFixture::class, $method));
+
+        $this->assertSame(
+            json_encode($expected, \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES),
+            json_encode($schema, \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES),
+        );
+
+        new Tool('probe', null, $schema, null, null);
     }
 }

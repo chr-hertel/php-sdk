@@ -107,19 +107,4 @@ class DocBlockParser
     {
         return $paramTag ? (trim((string) $paramTag->getDescription()) ?: null) : null;
     }
-
-    /**
-     * Gets the type string from a Param tag.
-     */
-    public function getParamTypeString(?Param $paramTag): ?string
-    {
-        if ($paramTag && $paramTag->getType()) {
-            $typeFromTag = trim((string) $paramTag->getType());
-            if (!empty($typeFromTag)) {
-                return ltrim($typeFromTag, '\\');
-            }
-        }
-
-        return null;
-    }
 }
