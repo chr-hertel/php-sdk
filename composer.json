@@ -23,6 +23,7 @@
     "opis/json-schema": "^2.4",
     "php-http/discovery": "^1.20",
     "phpdocumentor/reflection-docblock": "^5.6 || ^6.0",
+    "phpstan/phpdoc-parser": "^2.0",
     "psr/clock": "^1.0",
     "psr/container": "^1.0 || ^2.0",
     "psr/event-dispatcher": "^1.0",
@@ -33,6 +34,8 @@
     "psr/http-server-middleware": "^1.0",
     "psr/log": "^1.0 || ^2.0 || ^3.0",
     "symfony/deprecation-contracts": "^2.5 || ^3.0",
+    "symfony/json-schema": "8.2.x-dev",
+    "symfony/type-info": "^8.2@dev",
     "symfony/uid": "^5.4 || ^6.4 || ^7.3 || ^8.0"
   },
   "suggest": {
@@ -42,7 +45,6 @@
   },
   "require-dev": {
     "ext-openssl": "*",
-    "composer/semver": "^3.0",
     "firebase/php-jwt": "^6.10 || ^7.0",
     "laminas/laminas-httphandlerrunner": "^2.12",
     "nyholm/psr7": "^1.8",
@@ -58,7 +60,9 @@
     "symfony/console": "^5.4 || ^6.4 || ^7.3 || ^8.0",
     "symfony/finder": "^5.4 || ^6.4 || ^7.3 || ^8.0",
     "symfony/http-client": "^5.4 || ^6.4 || ^7.3 || ^8.0",
-    "symfony/process": "^5.4 || ^6.4 || ^7.3 || ^8.0"
+    "symfony/process": "^5.4 || ^6.4 || ^7.3 || ^8.0",
+    "symfony/serializer": "^8.2@dev",
+    "symfony/validator": "^8.2@dev"
   },
   "conflict": {
     "phpstan/phpstan": "2.3.0"
@@ -99,5 +103,18 @@
       "phpdocumentor/shim": true
     },
     "sort-packages": true
-  }
+  },
+  "repositories": [{
+    "name": "sf-json-schema",
+    "type": "path",
+    "url": "../json-schema/src/Symfony/Component/JsonSchema",
+    "options": {
+      "symlink": true,
+      "versions": {
+        "symfony/json-schema": "8.2.x-dev"
+      }
+    }
+  }],
+  "minimum-stability": "dev",
+  "prefer-stable": true
 }
