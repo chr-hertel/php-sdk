@@ -99,12 +99,4 @@ class DocBlockParser
 
         return $paramTags;
     }
-
-    /**
-     * Gets the description string from a Param tag.
-     */
-    public function getParamDescription(?Param $paramTag): ?string
-    {
-        return $paramTag ? (trim((string) $paramTag->getDescription()) ?: null) : null;
-    }
 }

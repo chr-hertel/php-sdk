@@ -11,7 +11,6 @@
 
 namespace Mcp\Tests\Unit\Capability\Discovery;
 
-use Mcp\Capability\Discovery\DocBlockParser;
 use Mcp\Capability\Discovery\SchemaGenerator;
 use Mcp\Capability\Discovery\SchemaValidator;
 use PHPUnit\Framework\Attributes\TestDox;
@@ -22,7 +21,7 @@ class SchemaGeneratorUnionTest extends TestCase
     #[TestDox('a generated schema keeps both branches of an array-or-scalar union')]
     public function testGeneratedUnionSchemaKeepsBothBranches(): void
     {
-        $schema = (new SchemaGenerator(new DocBlockParser()))
+        $schema = (new SchemaGenerator())
             ->generate(new \ReflectionMethod(UnionFixture::class, 'handle'));
 
         $this->assertSame([['type' => 'array', 'items' => ['type' => 'string']], ['type' => 'integer']], $schema['properties']['mixedish']['anyOf']);
@@ -40,7 +39,7 @@ class SchemaGeneratorUnionTest extends TestCase
     #[TestDox('a value from either branch validates against the generated schema')]
     public function testBothBranchesValidate(): void
     {
-        $schema = (new SchemaGenerator(new DocBlockParser()))
+        $schema = (new SchemaGenerator())
             ->generate(new \ReflectionMethod(UnionFixture::class, 'handle'));
 
         $validator = new SchemaValidator();

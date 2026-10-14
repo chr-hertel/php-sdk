@@ -264,7 +264,6 @@
           },
           "attendees": {
             "type": "array",
-            "default": [],
             "items": {
               "type": "string",
               "format": "email"

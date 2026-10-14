@@ -58,27 +58,21 @@ class DocBlockParserTest extends TestCase
 
         $this->assertInstanceOf(Param::class, $params['$param1']);
         $this->assertEquals('param1', $params['$param1']->getVariableName());
-        $this->assertEquals('description for string param', $this->parser->getParamDescription($params['$param1']));
 
         $this->assertInstanceOf(Param::class, $params['$param2']);
         $this->assertEquals('param2', $params['$param2']->getVariableName());
-        $this->assertEquals('description for nullable int param', $this->parser->getParamDescription($params['$param2']));
 
         $this->assertInstanceOf(Param::class, $params['$param3']);
         $this->assertEquals('param3', $params['$param3']->getVariableName());
-        $this->assertEquals('nothing to say', $this->parser->getParamDescription($params['$param3']));
 
         $this->assertInstanceOf(Param::class, $params['$param4']);
         $this->assertEquals('param4', $params['$param4']->getVariableName());
-        $this->assertEquals('Missing type', $this->parser->getParamDescription($params['$param4']));
 
         $this->assertInstanceOf(Param::class, $params['$param5']);
         $this->assertEquals('param5', $params['$param5']->getVariableName());
-        $this->assertEquals('array description', $this->parser->getParamDescription($params['$param5']));
 
         $this->assertInstanceOf(Param::class, $params['$param6']);
         $this->assertEquals('param6', $params['$param6']->getVariableName());
-        $this->assertEquals('object param', $this->parser->getParamDescription($params['$param6']));
     }
 
     public function testGetTagsByNameReturnsSpecificTags(): void

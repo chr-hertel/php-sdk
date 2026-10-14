@@ -20,8 +20,6 @@ use Symfony\Component\JsonSchema\Configuration;
 use Symfony\Component\JsonSchema\Schema as JsonSchema;
 use Symfony\Component\JsonSchema\SchemaGenerator as JsonSchemaGenerator;
 use Symfony\Component\JsonSchema\SchemaGeneratorInterface as JsonSchemaGeneratorInterface;
-use Symfony\Component\TypeInfo\Exception\UnsupportedException;
-use Symfony\Component\TypeInfo\Type;
 use Symfony\Component\TypeInfo\Type\ObjectType;
 use Symfony\Component\TypeInfo\TypeResolver\TypeResolver;
 use Symfony\Component\TypeInfo\TypeResolver\TypeResolverInterface;
@@ -29,9 +27,8 @@ use Symfony\Component\TypeInfo\TypeResolver\TypeResolverInterface;
 /**
  * Generates tool schemas with symfony/json-schema.
  *
- * The parameters of a handler become an array shape, so a single generate() call yields one
- * document whose `$defs` (left over by cyclic classes only) sit at the root of the input schema.
- * Descriptions, defaults and the {@see Schema} attribute stay parameter concerns handled here.
+ * The component describes the parameters, this class adds what is MCP specific: injectable
+ * parameters, reserved names and the {@see Schema} attribute.
  */
 final class SchemaGenerator implements SchemaGeneratorInterface
 {
@@ -39,7 +36,6 @@ final class SchemaGenerator implements SchemaGeneratorInterface
     private readonly TypeResolverInterface $typeResolver;
 
     public function __construct(
-        private readonly DocBlockParser $docBlockParser = new DocBlockParser(),
         ?JsonSchemaGeneratorInterface $generator = null,
         ?TypeResolverInterface $typeResolver = null,
         private readonly Configuration $configuration = new Configuration(),
@@ -61,7 +57,6 @@ final class SchemaGenerator implements SchemaGeneratorInterface
             return $methodSchema['definition'];
         }
 
-        $shape = [];
         $parameters = [];
         foreach ($reflection->getParameters() as $parameter) {
             $type = $parameter->getType();
@@ -73,28 +68,11 @@ final class SchemaGenerator implements SchemaGeneratorInterface
                 throw new InvalidArgumentException(\sprintf('Handler "%s" has parameter named "%s" which is not allowed. Please change the name of that parameter.', self::handlerName($reflection), $parameter->name));
             }
 
-            try {
-                $type = $this->typeResolver->resolve($parameter);
-            } catch (UnsupportedException) {
-                $type = Type::mixed();
-            }
-            if ($parameter->isVariadic()) {
-                $type = Type::list($type);
-            }
-
-            $shape[$parameter->name] = ['type' => $type, 'optional' => $parameter->isOptional()];
             $parameters[$parameter->name] = $parameter;
         }
 
-        // An empty shape is a list to the generator, a tool without arguments still takes an object.
-        $schema = $shape ? self::toArray($this->generator->generate(Type::arrayShape($shape), $this->configuration)->flatten()) : ['type' => 'object'];
-        unset($schema['$schema'], $schema['additionalProperties']);
-
-        // ArrayShapeType sorts its keys, the signature order is what clients should show.
-        $schema['properties'] = array_replace(array_intersect_key($parameters, $schema['properties'] ?? []), $schema['properties'] ?? []);
-        if (isset($schema['required'])) {
-            $schema['required'] = array_values(array_intersect(array_keys($parameters), $schema['required']));
-        }
+        $schema = self::toArray($this->generator->generateForParameters(array_values($parameters), $this->configuration)->flatten());
+        unset($schema['$schema']);
 
         $methodProperties = $methodSchema['properties'] ?? [];
         $methodRequired = $methodSchema['required'] ?? [];
@@ -106,25 +84,10 @@ final class SchemaGenerator implements SchemaGeneratorInterface
             $schema['required'] = $required;
         }
 
-        $paramTags = $this->docBlockParser->getParamTags($this->docBlockParser->parseDocBlock($reflection->getDocComment() ?: null));
-
         foreach ($parameters as $name => $parameter) {
             $property = (array) $schema['properties'][$name];
             if (isset($methodProperties[$name])) {
                 $property = [...$property, ...$methodProperties[$name]];
-            }
-
-            if (null !== $description = $this->docBlockParser->getParamDescription($paramTags['$'.$name] ?? null)) {
-                $property = ['description' => $description, ...$property];
-            }
-
-            if ($parameter->isDefaultValueAvailable()) {
-                $default = $parameter->getDefaultValue();
-                $property['default'] = match (true) {
-                    $default instanceof \BackedEnum => $default->value,
-                    $default instanceof \UnitEnum => $default->name,
-                    default => $default,
-                };
             }
 
             $parameterSchema = self::schemaAttribute($parameter) ?? [];
@@ -173,7 +136,7 @@ final class SchemaGenerator implements SchemaGeneratorInterface
     }
 
     /**
-     * Schema::toArray() leaves empty schemas as [], only jsonSerialize() keeps them as objects.
+     * Empty schemas come back as ArrayObject, the SDK keeps them as stdClass.
      *
      * @return array<string, mixed>
      */

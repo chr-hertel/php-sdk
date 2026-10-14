@@ -11,7 +11,6 @@
 
 namespace Mcp\Tests\Unit\Capability\Discovery;
 
-use Mcp\Capability\Discovery\DocBlockParser;
 use Mcp\Capability\Discovery\SchemaGenerator;
 use Mcp\Exception\InvalidArgumentException;
 use Mcp\Schema\Tool;
@@ -24,7 +23,7 @@ final class SchemaGeneratorTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->schemaGenerator = new SchemaGenerator(new DocBlockParser());
+        $this->schemaGenerator = new SchemaGenerator();
     }
 
     public function testGeneratesEmptyPropertiesObjectForMethodWithNoParameters(): void
@@ -46,7 +45,7 @@ final class SchemaGeneratorTest extends TestCase
         $this->assertEquals(['type' => 'integer'], $schema['properties']['age']);
         $this->assertEquals(['type' => 'boolean'], $schema['properties']['active']);
         $this->assertEquals(['type' => 'array', 'items' => new \stdClass()], $schema['properties']['tags']);
-        $this->assertEquals(['anyOf' => [['type' => 'object'], ['type' => 'null']], 'default' => null], $schema['properties']['config']);
+        $this->assertEquals(['anyOf' => [['type' => 'object'], ['type' => 'null']]], $schema['properties']['config']);
         $this->assertEqualsCanonicalizing(['name', 'age', 'active', 'tags'], $schema['required']);
     }
 
@@ -191,7 +190,6 @@ final class SchemaGeneratorTest extends TestCase
                 'deviceToken' => ['type' => 'string', 'description' => 'Required if type is push'],
             ],
             'required' => ['type'],
-            'default' => null,
         ], $schema['properties']['notificationConfig']);
         $this->assertEqualsCanonicalizing(['recipientId', 'messageBody'], $schema['required']);
     }
@@ -260,7 +258,7 @@ final class SchemaGeneratorTest extends TestCase
         $this->assertEquals(['type' => 'string', 'description' => 'Backed string enum', 'enum' => ['A', 'B']], $schema['properties']['stringEnum']);
         $this->assertEquals(['type' => 'integer', 'description' => 'Backed int enum', 'enum' => [1, 2]], $schema['properties']['intEnum']);
         $this->assertEquals(['type' => 'string', 'description' => 'Unit enum', 'enum' => ['Yes', 'No']], $schema['properties']['unitEnum']);
-        $this->assertEquals(['type' => ['string', 'null'], 'enum' => ['A', 'B', null], 'default' => null], $schema['properties']['nullableEnum']);
+        $this->assertEquals(['type' => ['string', 'null'], 'enum' => ['A', 'B', null]], $schema['properties']['nullableEnum']);
         $this->assertEquals(['type' => 'integer', 'enum' => [1, 2], 'default' => 1], $schema['properties']['enumWithDefault']);
         $this->assertEqualsCanonicalizing(['stringEnum', 'intEnum', 'unitEnum'], $schema['required']);
     }
@@ -290,7 +288,7 @@ final class SchemaGeneratorTest extends TestCase
         $schema = $this->schemaGenerator->generate($method);
         // A `|null` suffix must not erase the element type: `string[]|null` keeps `items: {type: string}`.
         $this->assertEquals(['type' => ['array', 'null'], 'description' => 'Nullable list of strings', 'items' => ['type' => 'string']], $schema['properties']['nullableStrings']);
-        $this->assertEquals(['type' => ['array', 'null'], 'description' => 'Nullable list of integers', 'default' => null, 'items' => ['type' => 'integer']], $schema['properties']['nullableInts']);
+        $this->assertEquals(['type' => ['array', 'null'], 'description' => 'Nullable list of integers', 'items' => ['type' => 'integer']], $schema['properties']['nullableInts']);
         $this->assertEqualsCanonicalizing(['nullableStrings'], $schema['required']);
     }
 
@@ -299,10 +297,10 @@ final class SchemaGeneratorTest extends TestCase
         $method = new \ReflectionMethod(SchemaGeneratorFixture::class, 'nullableAndOptional');
         $schema = $this->schemaGenerator->generate($method);
         $this->assertEquals(['type' => ['string', 'null'], 'description' => 'Nullable string'], $schema['properties']['nullableString']);
-        $this->assertEquals(['type' => ['integer', 'null'], 'description' => 'Nullable integer', 'default' => null], $schema['properties']['nullableInt']);
+        $this->assertEquals(['type' => ['integer', 'null'], 'description' => 'Nullable integer'], $schema['properties']['nullableInt']);
         $this->assertEquals(['type' => 'string', 'default' => 'default'], $schema['properties']['optionalString']);
         $this->assertEquals(['type' => 'boolean', 'default' => true], $schema['properties']['optionalBool']);
-        $this->assertEquals(['type' => 'array', 'default' => [], 'items' => new \stdClass()], $schema['properties']['optionalArray']);
+        $this->assertEquals(['type' => 'array', 'items' => new \stdClass()], $schema['properties']['optionalArray']);
         $this->assertEqualsCanonicalizing(['nullableString'], $schema['required']);
     }
 
@@ -488,8 +486,8 @@ final class SchemaGeneratorTest extends TestCase
         $this->assertSchema([
             'type' => 'object',
             'properties' => [
-                'city' => ['description' => 'the city to look up', 'type' => 'string'],
-                'fields' => ['description' => 'which fields to return', 'type' => 'array', 'items' => ['type' => 'string']],
+                'city' => ['type' => 'string', 'description' => 'the city to look up'],
+                'fields' => ['type' => 'array', 'items' => ['type' => 'string'], 'description' => 'which fields to return'],
                 'point' => [
                     'type' => 'object',
                     'properties' => ['label' => ['type' => 'string'], 'lat' => ['type' => 'number']], // sorted by TypeInfo
@@ -510,7 +508,6 @@ final class SchemaGeneratorTest extends TestCase
             'type' => 'object',
             'properties' => [
                 'user' => [
-                    'description' => 'the user to create',
                     'type' => 'object',
                     'properties' => [
                         'email' => ['type' => 'string', 'format' => 'email'],
@@ -530,6 +527,7 @@ final class SchemaGeneratorTest extends TestCase
                         'birthday' => ['type' => ['string', 'null'], 'format' => 'date-time'],
                     ],
                     'required' => ['email', 'age'],
+                    'description' => 'the user to create',
                 ],
             ],
             'required' => ['user'],
