@@ -268,6 +268,7 @@
               "type": "string",
               "format": "email"
             },
+            "default": [],
             "description": "List of attendee email addresses",
             "maxItems": 20
           }

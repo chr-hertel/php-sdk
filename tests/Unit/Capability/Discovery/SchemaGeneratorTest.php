@@ -300,7 +300,7 @@ final class SchemaGeneratorTest extends TestCase
         $this->assertEquals(['type' => ['integer', 'null'], 'description' => 'Nullable integer'], $schema['properties']['nullableInt']);
         $this->assertEquals(['type' => 'string', 'default' => 'default'], $schema['properties']['optionalString']);
         $this->assertEquals(['type' => 'boolean', 'default' => true], $schema['properties']['optionalBool']);
-        $this->assertEquals(['type' => 'array', 'items' => new \stdClass()], $schema['properties']['optionalArray']);
+        $this->assertEquals(['type' => 'array', 'items' => new \stdClass(), 'default' => []], $schema['properties']['optionalArray']);
         $this->assertEqualsCanonicalizing(['nullableString'], $schema['required']);
     }
 
@@ -523,7 +523,7 @@ final class SchemaGeneratorTest extends TestCase
                             ],
                             ['type' => 'null'],
                         ]],
-                        'tags' => ['type' => 'array', 'items' => ['type' => 'string']],
+                        'tags' => ['type' => 'array', 'items' => ['type' => 'string'], 'default' => []],
                         'birthday' => ['type' => ['string', 'null'], 'format' => 'date-time'],
                     ],
                     'required' => ['email', 'age'],
@@ -540,7 +540,7 @@ final class SchemaGeneratorTest extends TestCase
             'type' => 'object',
             'properties' => [
                 'name' => ['type' => 'string'],
-                'children' => ['type' => 'array', 'items' => ['$ref' => '#/$defs/FixtureCategory']],
+                'children' => ['type' => 'array', 'items' => ['$ref' => '#/$defs/FixtureCategory'], 'default' => []],
             ],
         ];
 
@@ -578,7 +578,7 @@ final class SchemaGeneratorTest extends TestCase
         $schema = (new SchemaGenerator(outputSchemaFromReturnType: true))->generateOutputSchema($method);
         $this->assertNotNull($schema);
         $this->assertSame('object', $schema['type']);
-        $this->assertSame(['email', 'age'], $schema['required']);
+        $this->assertSame(['email', 'age', 'address', 'tags', 'birthday'], $schema['required']);
     }
 
     public function testExplicitOutputSchemaWins(): void
