@@ -29,6 +29,7 @@ use Mcp\Client\Auth\FileCredentialStorage;
 use Mcp\Client\Auth\OAuth;
 use Mcp\Client\Transport\HttpTransport;
 use Mcp\Exception\AuthorizationException;
+use Mcp\Exception\ConnectionException;
 use Mcp\Tests\E2E\BrowserAuthorizationHandler;
 
 $endpoint = getenv('MCP_E2E_ENDPOINT') ?: 'http://localhost:8001/mcp';
@@ -71,8 +72,13 @@ try {
     $bare = Client::builder()->setClientInfo('mcp-client-auth-e2e', '1.0.0')->setInitTimeout(15)->build();
     $bare->connect(new HttpTransport($endpoint));
     $check('a client with no credentials is refused', false, 'the server let it in');
-} catch (AuthorizationException $e) {
-    $check('a client with no credentials is refused', str_contains($e->getMessage(), '401'), $e->getMessage());
+} catch (ConnectionException $e) {
+    // connect() wraps what it will not retry; the cause names the challenge.
+    $check(
+        'a client with no credentials is refused',
+        $e->getPrevious() instanceof AuthorizationException && str_contains($e->getMessage(), '401'),
+        $e->getMessage(),
+    );
 }
 
 fwrite(\STDOUT, "\nFirst run, no stored credentials\n");

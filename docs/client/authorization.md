@@ -291,17 +291,27 @@ where a human decides.
 
 Everything the flow can refuse to do arrives as `Mcp\Exception\AuthorizationException`,
 including a server that is still answering `401` after the client has done everything it
-can:
+can. From `connect()` it arrives wrapped, because that method reports every failure as a
+`ConnectionException`, so catch that and read the cause:
 
 ```php
 use Mcp\Exception\AuthorizationException;
+use Mcp\Exception\ConnectionException;
 
 try {
     $client->connect($transport);
-} catch (AuthorizationException $e) {
-    echo "Could not authorize: {$e->getMessage()}\n";
+} catch (ConnectionException $e) {
+    $cause = $e->getPrevious();
+
+    if ($cause instanceof AuthorizationException) {
+        echo "Could not authorize: {$cause->getMessage()}\n";
+    }
 }
 ```
+
+Every call after the handshake throws it directly. An authorization failure is never
+retried, whichever way it surfaces: `connect()` only repeats a `ConnectionException` it
+raised itself.
 
 A few of these are refusals on purpose, not bugs to work around: metadata that claims a
 resource the server is not, an authorization server whose metadata describes somebody

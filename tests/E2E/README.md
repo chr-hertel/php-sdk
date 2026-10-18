@@ -49,11 +49,14 @@ provider, unattended:
 | `client.php` | The run itself — the assertions are here |
 | `BrowserAuthorizationHandler.php` | Signs the user in at a real login form, so no human is needed |
 | `nginx.conf` | Routes `/mcp` and the well-known paths to `server.php` |
+| `keycloak/realm.json` | The realm Keycloak imports: one public client, one demo user, the audience mapper |
 
-The Keycloak realm is the one
-[`examples/server/oauth-keycloak`](../../examples/server/oauth-keycloak) already ships:
-one public client with loopback redirect URIs, one `demo` / `demo123` user, and a client
-scope whose audience mapper stamps the MCP server into the token.
+The Keycloak realm in `keycloak/realm.json` is this fixture's own, derived from the one
+[`examples/server/oauth-keycloak`](../../examples/server/oauth-keycloak) ships: one public
+client with loopback redirect URIs, one `demo` / `demo123` user, and a client scope whose
+audience mapper stamps this server's resource identifier into the token. It is a copy
+rather than a mount of the example's, so the example can change its port and audience
+without breaking this run.
 
 ## In continuous integration
 

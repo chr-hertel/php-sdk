@@ -19,20 +19,19 @@
 
 require_once dirname(__DIR__, 2).'/vendor/autoload.php';
 
+use Firebase\JWT\JWK;
 use Http\Discovery\Psr17Factory;
 use Laminas\HttpHandlerRunner\Emitter\SapiEmitter;
 use Mcp\Server;
 use Mcp\Server\Session\FileSessionStore;
 use Mcp\Server\Transport\Http\Middleware\AuthorizationMiddleware;
 use Mcp\Server\Transport\Http\Middleware\ProtectedResourceMetadataMiddleware;
-use Mcp\Server\Transport\Http\OAuth\JwksProvider;
 use Mcp\Server\Transport\Http\OAuth\JwtTokenValidator;
-use Mcp\Server\Transport\Http\OAuth\OidcDiscovery;
 use Mcp\Server\Transport\Http\OAuth\ProtectedResourceMetadata;
 use Mcp\Server\Transport\StreamableHttpTransport;
 
-$externalIssuer = getenv('MCP_E2E_ISSUER_EXTERNAL') ?: 'http://localhost:8181/realms/mcp';
-$internalIssuer = getenv('MCP_E2E_ISSUER_INTERNAL') ?: 'http://keycloak:8181/realms/mcp';
+$externalIssuer = getenv('MCP_E2E_ISSUER_EXTERNAL') ?: 'http://localhost:8181/realms/mcp-e2e';
+$internalIssuer = getenv('MCP_E2E_ISSUER_INTERNAL') ?: 'http://keycloak:8181/realms/mcp-e2e';
 $resource = getenv('MCP_E2E_RESOURCE') ?: 'http://localhost:8001/mcp';
 
 $metadata = new ProtectedResourceMetadata(
@@ -62,11 +61,14 @@ $response = $server->run(new StreamableHttpTransport(
         ...StreamableHttpTransport::defaultMiddleware(),
         new ProtectedResourceMetadataMiddleware($metadata),
         new AuthorizationMiddleware(
+            // Keycloak derives its issuer from the Host header, so a token minted for
+            // the client carries the address the client used. Keys are fetched over the
+            // compose network, where this container can actually reach Keycloak.
             new JwtTokenValidator(
-                issuer: [$externalIssuer, $internalIssuer],
-                audience: 'mcp-server',
-                jwksProvider: new JwksProvider(new OidcDiscovery()),
-                jwksUri: $internalIssuer.'/protocol/openid-connect/certs',
+                issuer: $externalIssuer,
+                // RFC 8707: the token has to name this resource, not just any server.
+                audience: $resource,
+                keys: JWK::parseKeySet(json_decode((string) file_get_contents($internalIssuer.'/protocol/openid-connect/certs'), true)),
             ),
             $metadata,
         ),
