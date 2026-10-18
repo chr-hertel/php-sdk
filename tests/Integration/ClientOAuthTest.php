@@ -18,6 +18,7 @@ use Mcp\Client\Auth\InMemoryCredentialStorage;
 use Mcp\Client\Auth\OAuth;
 use Mcp\Client\Transport\HttpTransport;
 use Mcp\Exception\AuthorizationException;
+use Mcp\Exception\ConnectionException;
 use PHPUnit\Framework\Attributes\TestDox;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Process\Process;
@@ -79,7 +80,7 @@ final class ClientOAuthTest extends TestCase
         $client = $this->connect();
 
         $this->assertSame(['whoami'], array_map(static fn ($tool) => $tool->name, $client->listTools()->tools));
-        $this->assertStringContainsString('the token was accepted', json_encode($client->callTool('whoami', [])->content));
+        $this->assertStringContainsString('the token was accepted', (string) json_encode($client->callTool('whoami', [])->content));
 
         $client->disconnect();
     }
@@ -149,7 +150,8 @@ final class ClientOAuthTest extends TestCase
         try {
             $this->connect();
             $this->fail('The client should not have connected.');
-        } catch (AuthorizationException $e) {
+        } catch (ConnectionException $e) {
+            $this->assertInstanceOf(AuthorizationException::class, $e->getPrevious());
             $this->assertStringContainsString('invalid_client', $e->getMessage());
         }
 
@@ -164,10 +166,14 @@ final class ClientOAuthTest extends TestCase
     {
         $client = Client::builder()->setClientInfo('integration-client', '1.0.0')->setInitTimeout(5)->build();
 
-        $this->expectException(AuthorizationException::class);
-        $this->expectExceptionMessage('rejected the request with 401');
-
-        $client->connect(new HttpTransport($this->resourceServerUrl.'/mcp'));
+        try {
+            $client->connect(new HttpTransport($this->resourceServerUrl.'/mcp'));
+            $this->fail('The server should have refused an unauthenticated client.');
+        } catch (ConnectionException $e) {
+            // connect() wraps what it will not retry; the cause names the challenge.
+            $this->assertInstanceOf(AuthorizationException::class, $e->getPrevious());
+            $this->assertStringContainsString('rejected the request with 401', $e->getMessage());
+        }
     }
 
     #[TestDox('the headless handler reads the code out of a redirect without following it')]
@@ -260,6 +266,7 @@ final class ClientOAuthTest extends TestCase
     private static function freePort(): int
     {
         $socket = stream_socket_server('tcp://127.0.0.1:0');
+        self::assertIsResource($socket);
         $port = (int) explode(':', (string) stream_socket_get_name($socket, false))[1];
         fclose($socket);
 

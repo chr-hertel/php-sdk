@@ -118,7 +118,15 @@ final class LoopbackAuthorizationHandler implements AuthorizationHandlerInterfac
             return null;
         }
 
-        return array_map(strval(...), array_filter($parameters, is_scalar(...)));
+        $callback = [];
+
+        foreach ($parameters as $name => $value) {
+            if (\is_string($name) && \is_scalar($value)) {
+                $callback[$name] = (string) $value;
+            }
+        }
+
+        return $callback;
     }
 
     private function open(string $url): void

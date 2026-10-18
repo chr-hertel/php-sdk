@@ -110,7 +110,10 @@ final class TokenEndpointTest extends TestCase
 
         $this->assertSame('urn:ietf:params:oauth:client-assertion-type:jwt-bearer', $server->form['client_assertion_type'] ?? null);
 
-        $claims = JWT::decode($server->form['client_assertion'], new Key(openssl_pkey_get_details($key)['key'], 'ES256'));
+        $details = openssl_pkey_get_details($key);
+        $this->assertIsArray($details);
+
+        $claims = JWT::decode($server->form['client_assertion'], new Key($details['key'], 'ES256'));
 
         $this->assertSame('a-client', $claims->iss);
         $this->assertSame('a-client', $claims->sub);
@@ -135,7 +138,10 @@ final class TokenEndpointTest extends TestCase
             'RS256',
         );
 
-        $claims = JWT::decode($server->form['client_assertion'], new Key(openssl_pkey_get_details($key)['key'], 'RS256'));
+        $details = openssl_pkey_get_details($key);
+        $this->assertIsArray($details);
+
+        $claims = JWT::decode($server->form['client_assertion'], new Key($details['key'], 'RS256'));
 
         $this->assertSame('a-client', $claims->iss);
         $this->assertSame('https://auth.example.com', $claims->aud);
@@ -250,8 +256,14 @@ final class CapturingTokenServer implements ClientInterface
     public function sendRequest(RequestInterface $request): ResponseInterface
     {
         $this->authorization = $request->hasHeader('Authorization') ? $request->getHeaderLine('Authorization') : null;
-        parse_str((string) $request->getBody(), $form);
-        $this->form = array_map(strval(...), $form);
+        parse_str((string) $request->getBody(), $parsed);
+        $this->form = [];
+
+        foreach ($parsed as $name => $value) {
+            if (\is_string($name) && \is_scalar($value)) {
+                $this->form[$name] = (string) $value;
+            }
+        }
 
         return $this->response ?? new Response(200, ['Content-Type' => 'application/json'], (string) json_encode([
             'access_token' => 'a-token',

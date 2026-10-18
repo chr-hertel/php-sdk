@@ -393,10 +393,12 @@ final class StubAuthorizationHandler implements AuthorizationHandlerInterface
         $this->server?->recordAuthorization($authorizationUrl);
         parse_str((string) parse_url($authorizationUrl, \PHP_URL_QUERY), $query);
 
+        $echoed = \is_string($query['state'] ?? null) ? $query['state'] : null;
+
         return array_filter([
             'code' => 'test-authorization-code',
             // An empty configured state stands for a response that carries none at all.
-            'state' => '' === $this->state ? null : ($this->state ?? ($query['state'] ?? null)),
+            'state' => '' === $this->state ? null : ($this->state ?? $echoed),
             'iss' => $this->issuer,
         ], static fn (?string $value): bool => null !== $value);
     }
@@ -452,7 +454,14 @@ final class FakeOAuthServer implements ClientInterface
     {
         $url = (string) $request->getUri();
         $this->requested[] = $url;
-        parse_str((string) $request->getBody(), $form);
+        parse_str((string) $request->getBody(), $parsed);
+        $form = [];
+
+        foreach ($parsed as $name => $value) {
+            if (\is_string($name) && \is_scalar($value)) {
+                $form[$name] = (string) $value;
+            }
+        }
 
         return match ($url) {
             'https://mcp.example.com/custom/location.json',
@@ -487,7 +496,14 @@ final class FakeOAuthServer implements ClientInterface
     public function recordAuthorization(string $url): void
     {
         parse_str((string) parse_url($url, \PHP_URL_QUERY), $query);
-        $this->authorization = array_map(strval(...), $query);
+        $flat = [];
+
+        foreach ($query as $name => $value) {
+            if (\is_string($name) && \is_scalar($value)) {
+                $flat[$name] = (string) $value;
+            }
+        }
+        $this->authorization = $flat;
     }
 
     private function register(string $body): ResponseInterface
@@ -502,7 +518,14 @@ final class FakeOAuthServer implements ClientInterface
      */
     private function issueToken(array $form): ResponseInterface
     {
-        $this->token = array_map(strval(...), $form);
+        $flat = [];
+
+        foreach ($form as $name => $value) {
+            if (\is_string($name) && \is_scalar($value)) {
+                $flat[$name] = (string) $value;
+            }
+        }
+        $this->token = $flat;
 
         return self::json(['access_token' => 'access-token-'.++$this->issued, 'token_type' => 'Bearer', 'expires_in' => 3600]);
     }

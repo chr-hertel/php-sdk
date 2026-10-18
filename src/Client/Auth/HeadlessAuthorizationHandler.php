@@ -49,13 +49,20 @@ final class HeadlessAuthorizationHandler implements AuthorizationHandlerInterfac
         }
 
         parse_str($query, $parameters);
-        $parameters = array_map(strval(...), array_filter($parameters, is_scalar(...)));
+
+        $callback = [];
+
+        foreach ($parameters as $name => $value) {
+            if (\is_string($name) && \is_scalar($value)) {
+                $callback[$name] = (string) $value;
+            }
+        }
 
         // Only the parameter names: the query carries the authorization code, and a
         // single-use credential in a log file is still a credential in a log file.
-        $this->logger->debug('Authorization endpoint redirected', ['parameters' => array_keys($parameters)]);
+        $this->logger->debug('Authorization endpoint redirected', ['parameters' => array_keys($callback)]);
 
-        return $parameters;
+        return $callback;
     }
 
     /**

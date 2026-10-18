@@ -6,9 +6,11 @@
 name: mcp-client-auth-e2e
 
 services:
-  # Keycloak imports the realm the OAuth example already ships: one public client
-  # with loopback redirect URIs, one demo user, and a client scope whose audience
-  # mapper stamps the MCP server into the token.
+  # Keycloak imports this fixture's own realm: one public client with loopback
+  # redirect URIs, one demo user, and a client scope whose audience mapper stamps
+  # this server's resource identifier into the token. Derived from the OAuth server
+  # example's realm, but owned here so the example's port and audience can change
+  # without breaking this run.
   keycloak:
     image: quay.io/keycloak/keycloak:24.0
     environment:
@@ -16,7 +18,7 @@ services:
       KEYCLOAK_ADMIN_PASSWORD: admin
       KC_HEALTH_ENABLED: "true"
     volumes:
-      - ../../examples/server/oauth-keycloak/keycloak/mcp-realm.json:/opt/keycloak/data/import/mcp-realm.json:ro
+      - ./keycloak/realm.json:/opt/keycloak/data/import/realm.json:ro
     command:
       - start-dev
       - --import-realm
@@ -43,8 +45,8 @@ services:
       # names: the one the client sees from the host, and the one this container
       # reaches over the compose network. Tokens carry the former and are verified
       # against keys fetched over the latter.
-      MCP_E2E_ISSUER_EXTERNAL: http://localhost:${E2E_KEYCLOAK_PORT:-8181}/realms/mcp
-      MCP_E2E_ISSUER_INTERNAL: http://keycloak:8181/realms/mcp
+      MCP_E2E_ISSUER_EXTERNAL: http://localhost:${E2E_KEYCLOAK_PORT:-8181}/realms/mcp-e2e
+      MCP_E2E_ISSUER_INTERNAL: http://keycloak:8181/realms/mcp-e2e
       MCP_E2E_RESOURCE: http://localhost:${E2E_MCP_PORT:-8001}/mcp
     depends_on:
       keycloak:

@@ -60,6 +60,14 @@ final class ConsoleAuthorizationHandler implements AuthorizationHandlerInterface
 
         parse_str($query, $parameters);
 
-        return array_map(strval(...), array_filter($parameters, is_scalar(...)));
+        $callback = [];
+
+        foreach ($parameters as $name => $value) {
+            if (\is_string($name) && \is_scalar($value)) {
+                $callback[$name] = (string) $value;
+            }
+        }
+
+        return $callback;
     }
 }

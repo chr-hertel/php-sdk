@@ -121,6 +121,14 @@ final class BrowserAuthorizationHandler implements AuthorizationHandlerInterface
             throw new AuthorizationException(\sprintf('The authorization server redirected to "%s", which carries nothing to continue with.', $location));
         }
 
-        return array_map(strval(...), array_filter($parameters, is_scalar(...)));
+        $callback = [];
+
+        foreach ($parameters as $name => $value) {
+            if (\is_string($name) && \is_scalar($value)) {
+                $callback[$name] = (string) $value;
+            }
+        }
+
+        return $callback;
     }
 }
