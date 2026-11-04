@@ -18,8 +18,10 @@ use Mcp\Schema\JsonRpc\Error;
 use Mcp\Schema\JsonRpc\Response;
 use Mcp\Schema\Notification\CancelledNotification;
 use Mcp\Schema\Notification\InitializedNotification;
+use Mcp\Schema\Request\CallToolRequest;
 use Mcp\Schema\Request\ElicitRequest;
 use Mcp\Schema\Request\GetPromptRequest;
+use Mcp\Schema\Request\InitializeRequest;
 use Mcp\Schema\Request\PingRequest;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -36,6 +38,40 @@ final class MessageFactoryTest extends TestCase
             GetPromptRequest::class,
             PingRequest::class,
         ]);
+    }
+
+    public function testToolArgumentsKeepTheirJsonTypes(): void
+    {
+        $messages = MessageFactory::make()->create('{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"t","arguments":{"object":{},"list":[],"numeric":{"0":"x"},"nested":[{"a":{}}]}}}');
+
+        $this->assertInstanceOf(CallToolRequest::class, $messages[0]);
+        $this->assertEquals(new \stdClass(), $messages[0]->arguments['object']);
+        $this->assertSame([], $messages[0]->arguments['list']);
+        $this->assertEquals((object) ['0' => 'x'], $messages[0]->arguments['numeric']);
+        $this->assertEquals([(object) ['a' => new \stdClass()]], $messages[0]->arguments['nested']);
+    }
+
+    public function testRootArgumentsWithNumericKeysStayAnObjectOnTheWire(): void
+    {
+        $messages = MessageFactory::make()->create('{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"t","arguments":{"0":"x"}}}');
+
+        $this->assertInstanceOf(CallToolRequest::class, $messages[0]);
+        $this->assertStringContainsString('"arguments":{"0":"x"}', json_encode($messages[0], \JSON_THROW_ON_ERROR));
+    }
+
+    public function testOtherParamsAreDecodedToArrays(): void
+    {
+        $messages = MessageFactory::make()->create('{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"x","version":"1"}}}');
+
+        $this->assertInstanceOf(InitializeRequest::class, $messages[0]);
+    }
+
+    public function testAnObjectWithNumericKeysIsNotABatch(): void
+    {
+        $messages = $this->factory->create('{"0":{"jsonrpc":"2.0","id":1,"method":"ping"}}');
+
+        $this->assertCount(1, $messages);
+        $this->assertInstanceOf(InvalidInputMessageException::class, $messages[0]);
     }
 
     public function testCreateRequestWithIntegerId(): void

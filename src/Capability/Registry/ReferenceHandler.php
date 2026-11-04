@@ -205,6 +205,10 @@ final class ReferenceHandler implements ReferenceHandlerInterface
             }
         }
 
+        if ($type instanceof \ReflectionUnionType) {
+            return self::acceptsOnlyArrays($type) ? self::objectsToArrays($argument) : $argument;
+        }
+
         if (!$type instanceof \ReflectionNamedType) {
             return $argument;
         }
@@ -242,12 +246,31 @@ final class ReferenceHandler implements ReferenceHandlerInterface
                 'string' => (string) $argument,
                 'bool', 'boolean' => $this->castToBoolean($argument),
                 'float', 'double' => $this->castToFloat($argument),
-                'array' => $this->castToArray($argument),
+                'array', 'iterable' => $this->castToArray($argument),
                 default => $argument,
             };
         } catch (\TypeError $e) {
             throw new InvalidArgumentException("Value cannot be cast to required type `{$typeName}`.", 0, $e);
         }
+    }
+
+    private static function acceptsOnlyArrays(\ReflectionUnionType $type): bool
+    {
+        $names = array_map(
+            static fn (\ReflectionType $branch): string => $branch instanceof \ReflectionNamedType ? strtolower($branch->getName()) : '',
+            $type->getTypes(),
+        );
+
+        return [] !== array_intersect($names, ['array', 'iterable']) && [] === array_intersect($names, ['object', 'stdclass']);
+    }
+
+    private static function objectsToArrays(mixed $value): mixed
+    {
+        if ($value instanceof \stdClass) {
+            $value = get_object_vars($value);
+        }
+
+        return \is_array($value) ? array_map(self::objectsToArrays(...), $value) : $value;
     }
 
     /**
@@ -307,10 +330,12 @@ final class ReferenceHandler implements ReferenceHandlerInterface
     /**
      * Helper to cast strictly to array.
      *
-     * @return array<int, mixed>
+     * @return array<int|string, mixed>
      */
     private function castToArray(mixed $argument): array
     {
+        $argument = self::objectsToArrays($argument);
+
         if (\is_array($argument)) {
             return $argument;
         }

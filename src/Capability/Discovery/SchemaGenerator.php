@@ -805,8 +805,8 @@ final class SchemaGenerator implements SchemaGeneratorInterface
             return $pseudoTypes;
         }
 
-        // A non-empty map with string keys is a JSON object; it cannot be the `[]` that an empty `{}` decodes to.
-        if (preg_match('/^non-empty-array\s*</', $normalizedType)) {
+        // The key type of a generic array decides between a JSON array and a JSON object.
+        if (preg_match('/^(?:non-empty-)?array\s*</', $normalizedType)) {
             return (array) $this->mapTypeToSchema($normalizedType)['type'];
         }
 

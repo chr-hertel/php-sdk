@@ -445,7 +445,7 @@ final class SchemaGeneratorTest extends TestCase
         $this->assertSame('{}', json_encode($schema['properties']['genericArray']['items']));
         $this->assertEquals(['type' => 'array', 'description' => 'Array of strings', 'items' => ['type' => 'string']], $schema['properties']['stringArray']);
         $this->assertEquals(['type' => 'array', 'description' => 'Array of integers', 'items' => ['type' => 'integer']], $schema['properties']['intArray']);
-        $this->assertEquals(['type' => 'array', 'description' => 'Mixed array map', 'items' => new \stdClass()], $schema['properties']['mixedMap']);
+        $this->assertEquals(['type' => 'object', 'description' => 'Mixed array map'], $schema['properties']['mixedMap']);
         $this->assertArrayHasKey('type', $schema['properties']['objectLikeArray']);
         $this->assertEquals('object', $schema['properties']['objectLikeArray']['type']);
         $this->assertArrayHasKey('properties', $schema['properties']['objectLikeArray']);

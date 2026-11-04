@@ -23,7 +23,8 @@ final class CallToolRequest extends Request
 {
     /**
      * @param string               $name      the name of the tool to invoke
-     * @param array<string, mixed> $arguments the arguments to pass to the tool
+     * @param array<string, mixed> $arguments the arguments to pass to the tool; when decoded from JSON,
+     *                                        nested objects are `\stdClass` and nested arrays are lists
      */
     public function __construct(
         public readonly string $name,
@@ -42,30 +43,26 @@ final class CallToolRequest extends Request
             throw new InvalidArgumentException('Missing or invalid "name" parameter for tools/call.');
         }
 
-        $arguments = $params['arguments'] ?? [];
+        $arguments = $params['arguments'] ?? new \stdClass();
 
-        if ($arguments instanceof \stdClass) {
-            $arguments = (array) $arguments;
-        }
-
-        if (!\is_array($arguments)) {
-            throw new InvalidArgumentException('Parameter "arguments" must be an array.');
+        if (\is_array($arguments) && array_is_list($arguments) || !\is_array($arguments) && !$arguments instanceof \stdClass) {
+            throw new InvalidArgumentException('Parameter "arguments" must be an object.');
         }
 
         return new self(
             $params['name'],
-            $arguments,
+            (array) $arguments,
         );
     }
 
     /**
-     * @return array{name: string, arguments: array<string, mixed>|\stdClass}
+     * @return array{name: string, arguments: \stdClass}
      */
     protected function getParams(): array
     {
         return [
             'name' => $this->name,
-            'arguments' => $this->arguments ?: new \stdClass(),
+            'arguments' => (object) $this->arguments,
         ];
     }
 }

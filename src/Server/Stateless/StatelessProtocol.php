@@ -265,7 +265,7 @@ final class StatelessProtocol
         // plain result even to a client that would read a stream.
         $wantsStream = self::DISCOVER_METHOD !== $method && (!$headerLayer || self::acceptsEventStream($headers));
 
-        return $this->dispatch($method, $decoded, $meta, $id, $wantsStream, $accessToken);
+        return $this->dispatch($method, $decoded, $body, $meta, $id, $wantsStream, $accessToken);
     }
 
     /**
@@ -451,10 +451,12 @@ final class StatelessProtocol
     /**
      * @param array<string, mixed> $decoded
      */
-    private function dispatch(string $method, array $decoded, RequestMeta $meta, string|int|null $id, bool $wantsStream = false, ?AccessToken $accessToken = null): StatelessResult
+    private function dispatch(string $method, array $decoded, string $body, RequestMeta $meta, string|int|null $id, bool $wantsStream = false, ?AccessToken $accessToken = null): StatelessResult
     {
         try {
-            $messages = $this->messageFactory->create(json_encode($decoded, \JSON_THROW_ON_ERROR));
+            $messages = $this->messageFactory->create($body);
+        } catch (\JsonException $e) {
+            return StatelessResult::error(Error::forParseError($e->getMessage()), 400);
         } catch (\Throwable $e) {
             $this->logger->warning('Rejected an unparseable modern-era request.', ['method' => $method, 'exception' => $e]);
 

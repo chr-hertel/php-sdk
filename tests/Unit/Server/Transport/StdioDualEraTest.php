@@ -62,6 +62,76 @@ final class StdioDualEraTest extends TestCase
         $this->assertSame('hi', $answers[2]['result']['content'][0]['text']);
     }
 
+    #[DataProvider('toolArguments')]
+    #[TestDox('tool arguments are validated with their JSON type: $json against $type')]
+    public function testToolArgumentsKeepTheirJsonType(string $type, string $json, bool $accepted): void
+    {
+        $builder = self::builder()->addTool(
+            static fn (mixed $value = null): string => json_encode($value, \JSON_THROW_ON_ERROR),
+            name: 'typed',
+            inputSchema: ['type' => 'object', 'properties' => ['value' => ['type' => $type]], 'required' => ['value']],
+        );
+        $params = ['name' => 'typed', 'arguments' => json_decode($json, flags: \JSON_THROW_ON_ERROR)];
+
+        foreach (self::eraOpenings($params) as $messages) {
+            $answer = $this->serve(clone $builder, $messages)[2];
+
+            if ($accepted) {
+                $this->assertSame(json_encode(json_decode($json)->value), $answer['result']['content'][0]['text']);
+            } else {
+                $this->assertSame(Error::INVALID_PARAMS, $answer['error']['code']);
+            }
+        }
+    }
+
+    /**
+     * @return iterable<string, array{string, string, bool}>
+     */
+    public static function toolArguments(): iterable
+    {
+        yield 'empty object as object' => ['object', '{"value":{}}', true];
+        yield 'numeric keys as object' => ['object', '{"value":{"0":"x"}}', true];
+        yield 'nested empty object as object' => ['object', '{"value":{"a":{}}}', true];
+        yield 'empty array as object' => ['object', '{"value":[]}', false];
+        yield 'list as object' => ['object', '{"value":["x"]}', false];
+        yield 'empty array as array' => ['array', '{"value":[]}', true];
+        yield 'list as array' => ['array', '{"value":["x"]}', true];
+        yield 'empty object as array' => ['array', '{"value":{}}', false];
+        yield 'numeric keys as array' => ['array', '{"value":{"0":"x"}}', false];
+    }
+
+    #[DataProvider('nonObjectArguments')]
+    #[TestDox('arguments that are not a JSON object are refused: $json')]
+    public function testArgumentsMustBeAJsonObject(string $json): void
+    {
+        $params = ['name' => 'echo', 'arguments' => json_decode($json, flags: \JSON_THROW_ON_ERROR)];
+
+        foreach (self::eraOpenings($params) as $messages) {
+            $this->assertSame(Error::INVALID_REQUEST, $this->serve(self::builder(), $messages)[2]['error']['code']);
+        }
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function nonObjectArguments(): iterable
+    {
+        yield 'empty array' => ['[]'];
+        yield 'list' => ['["x"]'];
+        yield 'string' => ['"x"'];
+    }
+
+    public function testObjectPropertyNameTheDecoderRefusesIsAParseError(): void
+    {
+        $params = ['name' => 'echo', 'arguments' => ["\0text" => 'hi']];
+
+        foreach (self::eraOpenings($params) as $messages) {
+            $lines = $this->exchange(self::builder(), $messages);
+
+            $this->assertSame(Error::PARSE_ERROR, $lines[\count($lines) - 1]['error']['code']);
+        }
+    }
+
     #[TestDox('a handshake after a modern opening is refused, naming the modern revisions')]
     public function testHandshakeAfterModernOpeningIsRefused(): void
     {
@@ -218,7 +288,7 @@ final class StdioDualEraTest extends TestCase
     public function testModernProgressIsStreamed(): void
     {
         $lines = $this->exchange(self::builder(), [
-            self::modern(1, 'tools/call', ['name' => 'count', 'arguments' => [], '_meta' => ['progressToken' => 'p']]),
+            self::modern(1, 'tools/call', ['name' => 'count', 'arguments' => new \stdClass(), '_meta' => ['progressToken' => 'p']]),
         ]);
 
         $this->assertSame(['notifications/progress', 'notifications/progress'], [$lines[0]['method'], $lines[1]['method']]);
@@ -230,7 +300,7 @@ final class StdioDualEraTest extends TestCase
     public function testRequestCompletesBeforeItsCancelIsRead(): void
     {
         $lines = $this->exchange(self::builder(), [
-            self::modern(1, 'tools/call', ['name' => 'count', 'arguments' => [], '_meta' => ['progressToken' => 'p']]),
+            self::modern(1, 'tools/call', ['name' => 'count', 'arguments' => new \stdClass(), '_meta' => ['progressToken' => 'p']]),
             ['jsonrpc' => '2.0', 'method' => 'notifications/cancelled', 'params' => ['requestId' => 1]],
         ]);
 
@@ -422,6 +492,23 @@ final class StdioDualEraTest extends TestCase
         ];
 
         return ['jsonrpc' => '2.0', 'id' => $id, 'method' => $method, 'params' => $params];
+    }
+
+    /**
+     * A `tools/call` with id 2, as each era's client sends it.
+     *
+     * @param array<string, mixed> $params
+     *
+     * @return iterable<string, list<array<string, mixed>>>
+     */
+    private static function eraOpenings(array $params): iterable
+    {
+        yield 'handshake' => [
+            self::initialize(1),
+            ['jsonrpc' => '2.0', 'method' => 'notifications/initialized'],
+            ['jsonrpc' => '2.0', 'id' => 2, 'method' => 'tools/call', 'params' => $params],
+        ];
+        yield 'modern' => [self::modern(2, 'tools/call', $params)];
     }
 
     /**

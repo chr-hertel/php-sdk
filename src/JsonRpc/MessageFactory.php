@@ -115,23 +115,17 @@ final class MessageFactory
      */
     public function create(string $input): array
     {
-        $data = json_decode($input, true, flags: \JSON_THROW_ON_ERROR);
+        $data = json_decode($input, false, flags: \JSON_THROW_ON_ERROR);
 
-        // A JSON-RPC payload is a single message (JSON object) or a batch (JSON
-        // array). Anything else (scalar, null) is invalid input rather than a
-        // parse error, and must not reach the per-message loop below.
-        if (!\is_array($data)) {
+        if (!\is_array($data) && !$data instanceof \stdClass) {
             return [new InvalidInputMessageException('A JSON-RPC message must be a JSON object or a batch array.')];
         }
 
-        // json_decode(assoc: true) maps both objects and arrays to PHP arrays. A
-        // list is a batch; a non-list (string keys) is a single message. An empty
-        // array is ambiguous ({} vs []) and invalid as either, so reject it.
-        if ([] === $data) {
+        if ([] === (array) $data) {
             return [new InvalidInputMessageException('A JSON-RPC message must not be empty.')];
         }
 
-        if (array_is_list($data)) {
+        if (\is_array($data)) {
             if (\count($data) > $this->maxBatchSize) {
                 return [new InvalidInputMessageException(\sprintf('JSON-RPC batch size %d exceeds the maximum allowed batch size of %d.', \count($data), $this->maxBatchSize))];
             }
@@ -144,22 +138,48 @@ final class MessageFactory
         $messages = [];
         foreach ($batch as $message) {
             try {
-                if (!\is_array($message)) {
+                if (!$message instanceof \stdClass) {
                     throw new InvalidInputMessageException('A JSON-RPC message must be a JSON object.');
                 }
 
-                $messages[] = $this->createMessage($message);
+                $messages[] = $this->createMessage(self::toArray($message));
             } catch (InvalidInputMessageException $e) {
                 // Recover the id only when it's a valid JSON-RPC scalar;
                 // a null or malformed id is left at the exception's null default.
-                if (\is_array($message) && isset($message['id']) && (\is_string($message['id']) || \is_int($message['id']))) {
-                    $e->setRequestId($message['id']);
+                $id = $message instanceof \stdClass ? ($message->id ?? null) : null;
+                if (\is_string($id) || \is_int($id)) {
+                    $e->setRequestId($id);
                 }
                 $messages[] = $e;
             }
         }
 
         return $messages;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private static function toArray(\stdClass $message): array
+    {
+        /** @var array<string, mixed> $data */
+        $data = self::objectsToArrays($message);
+
+        // Tool arguments are free-form JSON validated against a schema, so `{}` and `[]` must stay apart.
+        if (Schema\Request\CallToolRequest::getMethod() === ($data['method'] ?? null) && isset($message->params->arguments)) {
+            $data['params']['arguments'] = $message->params->arguments;
+        }
+
+        return $data;
+    }
+
+    private static function objectsToArrays(mixed $value): mixed
+    {
+        if ($value instanceof \stdClass) {
+            $value = get_object_vars($value);
+        }
+
+        return \is_array($value) ? array_map(self::objectsToArrays(...), $value) : $value;
     }
 
     /**
