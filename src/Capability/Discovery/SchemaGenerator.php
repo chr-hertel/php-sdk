@@ -308,6 +308,12 @@ final class SchemaGenerator implements SchemaGeneratorInterface
         // Add default value only if parameter actually has a default
         if ($paramInfo['has_default']) {
             $paramSchema['default'] = $paramInfo['default_value'];
+
+            // An empty PHP array encodes as `[]`, which a client could not send back to an object-only parameter.
+            $types = (array) ($paramSchema['type'] ?? []);
+            if ([] === $paramSchema['default'] && \in_array('object', $types, true) && !\in_array('array', $types, true)) {
+                $paramSchema['default'] = new \stdClass();
+            }
         }
 
         // Handle enums
@@ -806,7 +812,7 @@ final class SchemaGenerator implements SchemaGeneratorInterface
         }
 
         // The key type of a generic array decides between a JSON array and a JSON object.
-        if (preg_match('/^(?:non-empty-)?array\s*</', $normalizedType)) {
+        if (preg_match('/^(?:non-empty-)?array\s*<.*>$/s', $normalizedType)) {
             return (array) $this->mapTypeToSchema($normalizedType)['type'];
         }
 
