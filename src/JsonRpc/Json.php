@@ -24,6 +24,14 @@ final class Json
             $value = get_object_vars($value);
         }
 
-        return \is_array($value) ? array_map(self::objectsToArrays(...), $value) : $value;
+        if (!\is_array($value)) {
+            return $value;
+        }
+
+        foreach ($value as $key => $member) {
+            $value[$key] = self::objectsToArrays($member);
+        }
+
+        return $value;
     }
 }
