@@ -166,7 +166,7 @@ final class ReferenceHandlerTest extends TestCase
 
         $this->assertSame($plain, $handler->handle(new ElementReference(static fn (array $value): array => $value), $context));
         $this->assertSame($plain, $handler->handle(new ElementReference(static fn (array|string $value): array|string => $value), $context));
-        $this->assertSame($plain, iterator_to_array($handler->handle(new ElementReference(static fn (iterable $value): iterable => $value), $context)));
+        $this->assertSame($plain, $handler->handle(new ElementReference(static fn (iterable $value): iterable => $value), $context));
         $this->assertSame($value, $handler->handle(new ElementReference(static fn (\stdClass $value): \stdClass => $value), $context));
         $this->assertSame($value, $handler->handle(new ElementReference(static fn (object $value): object => $value), $context));
         $this->assertSame($value, $handler->handle(new ElementReference(static fn (array|\stdClass $value): array|\stdClass => $value), $context));
