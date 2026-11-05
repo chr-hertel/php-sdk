@@ -183,16 +183,20 @@ final class StdioDualEraTest extends TestCase
         yield 'empty array' => ['[]'];
         yield 'list' => ['["x"]'];
         yield 'string' => ['"x"'];
+        yield 'null' => ['null'];
     }
 
-    public function testObjectPropertyNameTheDecoderRefusesIsAParseError(): void
+    public function testMemberNameStartingWithANulByteIsRefused(): void
     {
         $params = ['name' => 'echo', 'arguments' => ["\0text" => 'hi']];
 
         foreach (self::eraOpenings($params) as $messages) {
             $lines = $this->exchange(self::builder(), $messages);
 
-            $this->assertSame(Error::PARSE_ERROR, $lines[\count($lines) - 1]['error']['code']);
+            $error = $lines[\count($lines) - 1];
+
+            $this->assertSame(Error::INVALID_REQUEST, $error['error']['code']);
+            $this->assertSame(2, $error['id']);
         }
     }
 

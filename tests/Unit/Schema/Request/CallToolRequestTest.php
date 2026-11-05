@@ -62,6 +62,7 @@ final class CallToolRequestTest extends TestCase
         yield 'empty list' => [[]];
         yield 'list' => [['Berlin']];
         yield 'string' => ['Berlin'];
+        yield 'null' => [null];
     }
 
     /**

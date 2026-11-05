@@ -455,8 +455,6 @@ final class StatelessProtocol
     {
         try {
             $messages = $this->messageFactory->create($body);
-        } catch (\JsonException $e) {
-            return StatelessResult::error(Error::forParseError($e->getMessage()), 400);
         } catch (\Throwable $e) {
             $this->logger->warning('Rejected an unparseable modern-era request.', ['method' => $method, 'exception' => $e]);
 

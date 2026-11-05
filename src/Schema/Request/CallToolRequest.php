@@ -55,7 +55,7 @@ final class CallToolRequest extends Request
             throw new InvalidArgumentException('Missing or invalid "name" parameter for tools/call.');
         }
 
-        $arguments = $params['arguments'] ?? new \stdClass();
+        $arguments = \array_key_exists('arguments', $params) ? $params['arguments'] : new \stdClass();
 
         if (\is_array($arguments) && array_is_list($arguments) || !\is_array($arguments) && !$arguments instanceof \stdClass) {
             throw new InvalidArgumentException('Parameter "arguments" must be an object.');

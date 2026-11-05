@@ -115,7 +115,15 @@ final class MessageFactory
      */
     public function create(string $input): array
     {
-        $data = json_decode($input, false, flags: \JSON_THROW_ON_ERROR);
+        try {
+            $data = json_decode($input, false, flags: \JSON_THROW_ON_ERROR);
+        } catch (\JsonException $e) {
+            if (\JSON_ERROR_INVALID_PROPERTY_NAME !== $e->getCode()) {
+                throw $e;
+            }
+
+            return [self::invalidMemberName($input)];
+        }
 
         if (!\is_array($data) && !$data instanceof \stdClass) {
             return [new InvalidInputMessageException('A JSON-RPC message must be a JSON object or a batch array.')];
@@ -155,6 +163,21 @@ final class MessageFactory
         }
 
         return $messages;
+    }
+
+    /**
+     * Valid JSON, but a PHP object cannot hold a property whose name starts with NUL.
+     */
+    private static function invalidMemberName(string $input): InvalidInputMessageException
+    {
+        $exception = new InvalidInputMessageException('A JSON-RPC message must not have a member name starting with a NUL byte.');
+        $id = json_decode($input, true)['id'] ?? null;
+
+        if (\is_string($id) || \is_int($id)) {
+            $exception->setRequestId($id);
+        }
+
+        return $exception;
     }
 
     /**
