@@ -30,6 +30,11 @@ All notable changes to `mcp/sdk` will be documented in this file.
 * [BC Break] Answer `server/discover` with `DiscoverHandler`, which a handler added through `Builder::addRequestHandler()` can replace, and dispatch `RequestEvent`, `ResponseEvent` and `ErrorEvent` for it. A `StatelessProtocol` built without the `Builder` needs `DiscoverHandler` and a `MessageFactory` with `DiscoverRequest` to answer it.
 * Add a `binder` argument to `Builder::setRequestState()` binding the modern era's `requestState` to the request it was minted for, as the 2026-07-28 specification recommends: the binder's value is covered by the state's MAC, and a state echoed on a request that binds to another value is refused like a forged one. `OriginatingRequestBinder` binds the authenticated principal, the method, the tool, prompt or resource, and a digest of the arguments; a token without a subject fails closed, and a `subject` resolver identifies users by another claim. `RequestStateBinderInterface` takes custom bindings. Without a binder, nothing changes.
 * Rotate the `requestState` signing key without failing the calls in flight: `Builder::setRequestState()` and `RequestStateCodec` take a list of keys, the first signing and every key verifying. The wire format is unchanged, and a single key works as before.
+* [BC Break] Keep the JSON types of `tools/call` arguments, so validation sees what the client sent: `{}` and `{"0":"x"}` are objects, `[]` and `["x"]` are arrays. Nested JSON objects in `CallToolRequest::$arguments` and in the arguments of `ToolHandlerInterface::execute()` are `\stdClass`.
+* [BC Break] Tool parameters without a type, or typed `mixed`, receive nested JSON objects as `\stdClass`. Parameters typed `array` still receive arrays at every level. Parameters typed `object` or `\stdClass`, which always failed with a `TypeError`, receive `\stdClass`.
+* [BC Break] Reject `tools/call` when `arguments` is not a JSON object with `-32600`, including `"arguments": []`.
+* [BC Break] Reject a JSON-RPC message with a member name starting with a NUL byte with `-32600`, as a PHP object cannot hold such a name.
+* [BC Break] `array<string, T>` parameters generate `{"type": "object"}` instead of `{"type": "array"}`, and `array<int, T>` parameters accept a JSON array or a JSON object.
 
 ### Client
 
