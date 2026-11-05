@@ -265,7 +265,7 @@ final class StatelessProtocol
         // plain result even to a client that would read a stream.
         $wantsStream = self::DISCOVER_METHOD !== $method && (!$headerLayer || self::acceptsEventStream($headers));
 
-        return $this->dispatch($method, $decoded, $body, $meta, $id, $wantsStream, $accessToken);
+        return $this->dispatch($method, $params, $body, $meta, $id, $wantsStream, $accessToken);
     }
 
     /**
@@ -449,9 +449,9 @@ final class StatelessProtocol
     }
 
     /**
-     * @param array<string, mixed> $decoded
+     * @param array<string, mixed>|null $params
      */
-    private function dispatch(string $method, array $decoded, string $body, RequestMeta $meta, string|int|null $id, bool $wantsStream = false, ?AccessToken $accessToken = null): StatelessResult
+    private function dispatch(string $method, ?array $params, string $body, RequestMeta $meta, string|int|null $id, bool $wantsStream = false, ?AccessToken $accessToken = null): StatelessResult
     {
         try {
             $messages = $this->messageFactory->create($body);
@@ -525,7 +525,7 @@ final class StatelessProtocol
         }
 
         try {
-            $input = $this->liftInputContext($decoded['params'] ?? null, $requestStateCodec);
+            $input = $this->liftInputContext($params, $requestStateCodec);
         } catch (RequestStateException $e) {
             // Invalid params, not an authorization failure: the client only
             // echoes what it was given, and the reason stays out of the answer.
