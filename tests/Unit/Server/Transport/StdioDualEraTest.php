@@ -100,6 +100,70 @@ final class StdioDualEraTest extends TestCase
         yield 'numeric keys as array' => ['array', '{"value":{"0":"x"}}', false];
     }
 
+    /**
+     * @param array<string, mixed> $valueSchema
+     * @param array<string, mixed> $defs
+     */
+    #[DataProvider('schemaKeywords')]
+    #[TestDox('schema keywords see the JSON type of the arguments: $json')]
+    public function testSchemaKeywordsSeeTheJsonType(array $valueSchema, string $json, bool $accepted, array $defs = []): void
+    {
+        $inputSchema = ['type' => 'object', 'properties' => ['value' => $valueSchema], 'required' => ['value']];
+        if ([] !== $defs) {
+            $inputSchema['$defs'] = $defs;
+        }
+
+        $builder = self::builder()->addTool(
+            static fn (mixed $value = null): string => json_encode($value, \JSON_THROW_ON_ERROR),
+            name: 'typed',
+            inputSchema: $inputSchema,
+        );
+        $params = ['name' => 'typed', 'arguments' => json_decode($json, flags: \JSON_THROW_ON_ERROR)];
+
+        foreach (self::eraOpenings($params) as $messages) {
+            $answer = $this->serve(clone $builder, $messages)[2];
+
+            if ($accepted) {
+                $this->assertSame(json_encode(json_decode($json)->value), $answer['result']['content'][0]['text']);
+            } else {
+                $this->assertSame(Error::INVALID_PARAMS, $answer['error']['code']);
+            }
+        }
+    }
+
+    /**
+     * @return iterable<string, array<int, mixed>>
+     */
+    public static function schemaKeywords(): iterable
+    {
+        $nestedArray = ['type' => 'object', 'properties' => ['list' => ['type' => 'array']]];
+        yield 'nested array is an array' => [$nestedArray, '{"value":{"list":[]}}', true];
+        yield 'nested object is no array' => [$nestedArray, '{"value":{"list":{}}}', false];
+
+        $items = ['type' => 'array', 'items' => ['type' => 'object']];
+        yield 'array item is an object' => [$items, '{"value":[{}]}', true];
+        yield 'array item is no object' => [$items, '{"value":[[]]}', false];
+
+        $additional = ['type' => 'object', 'additionalProperties' => ['type' => 'object']];
+        yield 'additional property is an object' => [$additional, '{"value":{"a":{}}}', true];
+        yield 'additional property is no object' => [$additional, '{"value":{"a":[]}}', false];
+
+        $ref = ['$ref' => '#/$defs/settings'];
+        $defs = ['settings' => ['type' => 'object']];
+        yield 'reference to an object gets an object' => [$ref, '{"value":{}}', true, $defs];
+        yield 'reference to an object gets an array' => [$ref, '{"value":[]}', false, $defs];
+
+        foreach (['oneOf', 'anyOf'] as $keyword) {
+            $union = [$keyword => [['type' => 'object'], ['type' => 'array']]];
+            yield $keyword.' keeps an object' => [$union, '{"value":{}}', true];
+            yield $keyword.' keeps an array' => [$union, '{"value":[]}', true];
+
+            $nonEmptyList = [$keyword => [['type' => 'object'], ['type' => 'array', 'minItems' => 1]]];
+            yield $keyword.' with an object branch gets an object' => [$nonEmptyList, '{"value":{}}', true];
+            yield $keyword.' with a non-empty list branch gets an empty array' => [$nonEmptyList, '{"value":[]}', false];
+        }
+    }
+
     #[DataProvider('nonObjectArguments')]
     #[TestDox('arguments that are not a JSON object are refused: $json')]
     public function testArgumentsMustBeAJsonObject(string $json): void
