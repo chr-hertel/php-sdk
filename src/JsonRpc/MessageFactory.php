@@ -142,7 +142,7 @@ final class MessageFactory
                     throw new InvalidInputMessageException('A JSON-RPC message must be a JSON object.');
                 }
 
-                $messages[] = $this->createMessage(self::toArray($message));
+                $messages[] = $this->createMessage($message);
             } catch (InvalidInputMessageException $e) {
                 // Recover the id only when it's a valid JSON-RPC scalar;
                 // a null or malformed id is left at the exception's null default.
@@ -158,39 +158,15 @@ final class MessageFactory
     }
 
     /**
-     * @return array<string, mixed>
-     */
-    private static function toArray(\stdClass $message): array
-    {
-        /** @var array<string, mixed> $data */
-        $data = self::objectsToArrays($message);
-
-        // Tool arguments are free-form JSON validated against a schema, so `{}` and `[]` must stay apart.
-        if (Schema\Request\CallToolRequest::getMethod() === ($data['method'] ?? null) && isset($message->params->arguments)) {
-            $data['params']['arguments'] = $message->params->arguments;
-        }
-
-        return $data;
-    }
-
-    private static function objectsToArrays(mixed $value): mixed
-    {
-        if ($value instanceof \stdClass) {
-            $value = get_object_vars($value);
-        }
-
-        return \is_array($value) ? array_map(self::objectsToArrays(...), $value) : $value;
-    }
-
-    /**
      * Creates a single message object from parsed JSON data.
-     *
-     * @param array<string, mixed> $data
      *
      * @throws InvalidInputMessageException
      */
-    private function createMessage(array $data): MessageInterface
+    private function createMessage(\stdClass $message): MessageInterface
     {
+        /** @var array<string, mixed> $data */
+        $data = Json::objectsToArrays($message);
+
         try {
             if (isset($data['error'])) {
                 return Error::fromArray($data);
@@ -209,6 +185,11 @@ final class MessageFactory
             }
 
             $messageClass = $this->findMessageClassByMethod($data['method']);
+
+            // Each message knows which of its params are free-form JSON, so it gets them as decoded.
+            if (isset($message->params)) {
+                $data['params'] = $message->params;
+            }
 
             return $messageClass::fromArray($data);
         } catch (InvalidArgumentException $e) {

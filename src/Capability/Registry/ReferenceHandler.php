@@ -13,6 +13,7 @@ namespace Mcp\Capability\Registry;
 
 use Mcp\Exception\InvalidArgumentException;
 use Mcp\Exception\RegistryException;
+use Mcp\JsonRpc\Json;
 use Mcp\Server\Session\SessionInterface;
 use Psr\Container\ContainerInterface;
 
@@ -206,7 +207,7 @@ final class ReferenceHandler implements ReferenceHandlerInterface
         }
 
         if ($type instanceof \ReflectionUnionType) {
-            return self::acceptsOnlyArrays($type) ? self::objectsToArrays($argument) : $argument;
+            return self::acceptsOnlyArrays($type) ? Json::objectsToArrays($argument) : $argument;
         }
 
         if (!$type instanceof \ReflectionNamedType) {
@@ -262,15 +263,6 @@ final class ReferenceHandler implements ReferenceHandlerInterface
         );
 
         return [] !== array_intersect($names, ['array', 'iterable']) && [] === array_intersect($names, ['object', 'stdclass']);
-    }
-
-    private static function objectsToArrays(mixed $value): mixed
-    {
-        if ($value instanceof \stdClass) {
-            $value = get_object_vars($value);
-        }
-
-        return \is_array($value) ? array_map(self::objectsToArrays(...), $value) : $value;
     }
 
     /**
@@ -334,7 +326,7 @@ final class ReferenceHandler implements ReferenceHandlerInterface
      */
     private function castToArray(mixed $argument): array
     {
-        $argument = self::objectsToArrays($argument);
+        $argument = Json::objectsToArrays($argument);
 
         if (\is_array($argument)) {
             return $argument;

@@ -37,6 +37,18 @@ final class CallToolRequest extends Request
         return 'tools/call';
     }
 
+    protected static function paramsToArray(\stdClass $params): array
+    {
+        $array = parent::paramsToArray($params);
+
+        // Arguments are free-form JSON validated against a schema, so `{}` and `[]` must stay apart.
+        if (isset($params->arguments)) {
+            $array['arguments'] = $params->arguments;
+        }
+
+        return $array;
+    }
+
     protected static function fromParams(?array $params): static
     {
         if (!isset($params['name']) || !\is_string($params['name'])) {

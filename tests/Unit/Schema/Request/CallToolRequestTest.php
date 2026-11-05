@@ -35,6 +35,16 @@ final class CallToolRequestTest extends TestCase
         $this->assertSame(['city' => 'Berlin'], self::request(['name' => 'weather', 'arguments' => ['city' => 'Berlin']])->arguments);
     }
 
+    public function testObjectParamsKeepTheJsonTypesOfArgumentsOnly(): void
+    {
+        $arguments = (object) ['filter' => new \stdClass(), 'ids' => []];
+        $request = self::request((object) ['name' => 'weather', 'arguments' => $arguments, '_meta' => (object) ['trace' => (object) []]]);
+
+        $this->assertEquals(new \stdClass(), $request->arguments['filter']);
+        $this->assertSame([], $request->arguments['ids']);
+        $this->assertSame(['trace' => []], $request->getMeta());
+    }
+
     #[DataProvider('invalidArguments')]
     public function testArgumentsMustBeAnObject(mixed $arguments): void
     {
@@ -55,9 +65,9 @@ final class CallToolRequestTest extends TestCase
     }
 
     /**
-     * @param array<string, mixed> $params
+     * @param array<string, mixed>|\stdClass $params
      */
-    private static function request(array $params): CallToolRequest
+    private static function request(array|\stdClass $params): CallToolRequest
     {
         return CallToolRequest::fromArray(['jsonrpc' => '2.0', 'id' => 1, 'method' => 'tools/call', 'params' => $params]);
     }
