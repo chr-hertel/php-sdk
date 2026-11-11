@@ -18,7 +18,7 @@
     }
   ],
   "require": {
-    "php": "^8.1",
+    "php": "^8.2",
     "ext-fileinfo": "*",
     "opis/json-schema": "^2.4",
     "php-http/discovery": "^1.20",
@@ -34,8 +34,8 @@
     "psr/http-server-middleware": "^1.0",
     "psr/log": "^1.0 || ^2.0 || ^3.0",
     "symfony/deprecation-contracts": "^2.5 || ^3.0",
-    "symfony/json-schema": "8.2.x-dev",
-    "symfony/type-info": "^8.2@dev",
+    "symfony/json-schema": "^8.2@beta",
+    "symfony/type-info": "^7.4.6 || ^8.0.6",
     "symfony/uid": "^5.4 || ^6.4 || ^7.3 || ^8.0"
   },
   "suggest": {
@@ -61,8 +61,8 @@
     "symfony/finder": "^5.4 || ^6.4 || ^7.3 || ^8.0",
     "symfony/http-client": "^5.4 || ^6.4 || ^7.3 || ^8.0",
     "symfony/process": "^5.4 || ^6.4 || ^7.3 || ^8.0",
-    "symfony/serializer": "^8.2@dev",
-    "symfony/validator": "^8.2@dev"
+    "symfony/serializer": "^7.4 || ^8.0",
+    "symfony/validator": "^7.4 || ^8.0"
   },
   "conflict": {
     "phpstan/phpstan": "2.3.0"
@@ -103,18 +103,5 @@
       "phpdocumentor/shim": true
     },
     "sort-packages": true
-  },
-  "repositories": [{
-    "name": "sf-json-schema",
-    "type": "path",
-    "url": "../json-schema/src/Symfony/Component/JsonSchema",
-    "options": {
-      "symlink": true,
-      "versions": {
-        "symfony/json-schema": "8.2.x-dev"
-      }
-    }
-  }],
-  "minimum-stability": "dev",
-  "prefer-stable": true
+  }
 }
